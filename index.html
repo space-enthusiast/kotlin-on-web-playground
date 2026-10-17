@@ -3,250 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="GraalVM Web Image로 Kotlin 컴파일러를 WebAssembly로 만들어 서버 없이 브라우저에서 컴파일·실행하는 원리">
-<title>브라우저 속 kotlinc</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<title>Kotlin on Web Playground</title>
 <style>
-/* Layout: one reading column; build-time (amber, 내 컴퓨터) vs run-time (teal, 독자 브라우저) colour-code every diagram */
-:root{
-  --bg:#f6f7f9; --surface:#ffffff; --fg:#1b1f27; --muted:#5b6474; --line:#dde1e8;
-  --build:#b86a0b; --build-soft:#fdf1e1;
-  --run:#0f7b78; --run-soft:#e0f3f2;
-  --code-bg:#eef0f4;
-  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
-}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#12151b; --surface:#1a1e26; --fg:#e7e9ee; --muted:#9aa3b2; --line:#2c323d;
-  --build:#f0a64a; --build-soft:#2e2416; --run:#4fc9c3; --run-soft:#13302f; --code-bg:#222833; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#12151b; --surface:#1a1e26; --fg:#e7e9ee; --muted:#9aa3b2; --line:#2c323d;
-  --build:#f0a64a; --build-soft:#2e2416; --run:#4fc9c3; --run-soft:#13302f; --code-bg:#222833; color-scheme:dark}
-
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.75;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 80px}
-main{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
-h1{font-size:clamp(28px,5vw,40px);line-height:1.25;margin:0;text-wrap:balance;font-weight:700}
-h2{font-size:22px;margin:0 0 12px;text-wrap:balance}
-h3{font-size:17px;margin:0 0 4px}
-p{margin:0 0 12px;max-width:65ch}
-.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.lede{font-size:18px;color:var(--muted);margin-top:16px}
-code,.mono{font-family:var(--f-mono);font-size:.88em}
-code{background:var(--code-bg);padding:1px 6px;border-radius:4px}
-.b{color:var(--build);font-weight:700}.r{color:var(--run);font-weight:700}
-
-.summary{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px 22px;font-size:17px}
-.summary p:last-child{margin:0}
-
-/* analogy */
-.analogy{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:16px}
-.analogy>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
-.analogy .tag{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
-.analogy .pick{border-color:var(--run);box-shadow:0 0 0 1px var(--run) inset}
-.analogy p{font-size:15px;margin:6px 0 0}
-
-/* pipeline */
-.stage{border-radius:12px;padding:18px;border:1px solid var(--line)}
-.stage.build{background:var(--build-soft);border-color:color-mix(in srgb,var(--build) 35%,transparent)}
-.stage.run{background:var(--run-soft);border-color:color-mix(in srgb,var(--run) 35%,transparent)}
-.stage-head{font-family:var(--f-mono);font-size:13px;font-weight:600;margin-bottom:12px}
-.build .stage-head{color:var(--build)}.run .stage-head{color:var(--run)}
-.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
-.node{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;flex:1 1 150px;min-width:0;font-size:14px;line-height:1.5}
-.node strong{display:block;font-family:var(--f-mono);font-size:13px}
-.node span{color:var(--muted);font-size:13px}
-.arrow{align-self:center;color:var(--muted);font-family:var(--f-mono)}
-.between{text-align:center;font-family:var(--f-mono);font-size:13px;color:var(--muted);padding:10px 0}
-@media (max-width:560px){.flow{flex-direction:column}.arrow{transform:rotate(90deg)}}
-
-/* steps */
-.steps{display:flex;flex-direction:column;gap:20px;margin-top:8px}
-.step{display:grid;grid-template-columns:40px 1fr;gap:14px}
-.step .n{font-family:var(--f-mono);font-weight:600;color:var(--build);font-size:20px;line-height:1.3}
-.step p{font-size:15px}
-.step .eg{font-size:14px;color:var(--muted);border-left:2px solid var(--line);padding-left:12px}
-
-.callout{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--run);border-radius:8px;padding:16px 18px}
-.callout p:last-child{margin:0}
-
-.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-table{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
-th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:12px;font-family:var(--f-mono);color:var(--muted);font-weight:600;letter-spacing:.04em}
-tr:last-child td{border-bottom:0}
-tr.hl td{background:var(--run-soft)}
-
-ul.plain{margin:0;padding-left:20px}ul.plain li{margin-bottom:6px}
-dl.gloss{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:0}
-dl.gloss dt{font-family:var(--f-mono);font-size:14px;font-weight:600}
-dl.gloss dd{margin:0;font-size:15px;color:var(--muted)}
-@media (max-width:480px){dl.gloss{grid-template-columns:1fr}dl.gloss dd{margin-bottom:8px}}
-.src{font-size:13px;color:var(--muted)}
-.src a{color:var(--run)}
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; }
+  textarea { width: 100%; height: 220px; font: 14px/1.5 ui-monospace, Consolas, monospace; box-sizing: border-box; }
+  pre { background: #111; color: #ddd; padding: 12px; min-height: 80px; white-space: pre-wrap; }
+  .err { color: #ff7b72; }
 </style>
 </head>
 <body>
-<main>
-<header>
-  <div class="eyebrow">GraalVM Web Image · 설명서</div>
-  <h1>Kotlin 컴파일러를 통째로 브라우저에 넣는 법</h1>
-  <p class="lede">서버 없이, 독자의 브라우저 탭 안에서 진짜 <code>kotlinc</code>가 코드를 컴파일하고 실행한다. 어떻게 가능한지 그림으로 정리했다.</p>
-</header>
+<h1>Kotlin on Web Playground</h1>
+<p>서버 없이 브라우저 안에서 진짜 Kotlin 컴파일러(K2, Wasm으로 변환됨)가 컴파일하고 실행합니다.
+첫 Run은 컴파일러(약 75MB)를 내려받느라 시간이 걸립니다.</p>
 
-<section class="summary">
-  <p><strong>한 줄 요약.</strong> <code>kotlinc</code>는 원래 JVM에서만 도는 자바 프로그램이다. Web Image는 이 프로그램을 <span class="b">내 컴퓨터에서 미리</span> 브라우저가 알아듣는 WebAssembly(<code>.wasm</code>)로 통째로 번역해 둔다. 그러면 <span class="r">독자의 브라우저</span>는 JVM 없이 그 파일을 받아 바로 실행할 수 있다.</p>
-</section>
+<textarea id="src" spellcheck="false">import kotlin.math.pow
 
-<section>
-  <h2>비유: 통역사냐, 번역서냐</h2>
-  <p>브라우저는 JVM 바이트코드(<code>.class</code>)를 못 읽는다. 해결 방법은 크게 세 가지다.</p>
-  <div class="analogy">
-    <div>
-      <div class="tag">평소의 JVM</div>
-      <h3>현장 통역사</h3>
-      <p>실행할 때마다 JVM이 바이트코드를 그 자리에서 해석한다. 브라우저에는 이 통역사가 없다.</p>
-    </div>
-    <div>
-      <div class="tag">CheerpJ · WebVM</div>
-      <h3>통역사를 데려가기</h3>
-      <p>JVM(또는 리눅스 전체)을 브라우저 안에서 흉내 낸다. 되긴 하지만 무겁고 느리다.</p>
-    </div>
-    <div class="pick">
-      <div class="tag">GraalVM Web Image</div>
-      <h3>미리 번역해 출판</h3>
-      <p>빌드할 때 한 번 번역해 <code>.wasm</code>으로 만들어 둔다. 독자는 번역본만 받으면 된다.</p>
-    </div>
-  </div>
-  <p style="margin-top:14px">"미리 번역"을 전문 용어로 <strong>AOT(Ahead-Of-Time) 컴파일</strong>이라고 한다. 평소 JVM은 실행 중에 번역하는 <strong>JIT(Just-In-Time)</strong> 방식이다.</p>
-</section>
+fun choose(n: Int, k: Int): Long =
+    (1..k).fold(1L) { acc, i -> acc * (n - k + i) / i }
 
-<section>
-  <h2>전체 흐름</h2>
-  <p>두 장소에서 일이 일어난다. 색으로 구분했다: <span class="b">주황 = 내 컴퓨터, 빌드할 때 한 번</span> · <span class="r">청록 = 독자 브라우저, Run 누를 때마다</span>.</p>
+fun binomPmf(k: Int, n: Int, p: Double): Double =
+    choose(n, k) * p.pow(k) * (1 - p).pow(n - k)
 
-  <div class="stage build">
-    <div class="stage-head">① 빌드 시점 · 내 컴퓨터 · 한 번만</div>
-    <div class="flow">
-      <div class="node"><strong>kotlin-compiler.jar</strong><span>kotlinc 본체. 자바 바이트코드 묶음</span></div>
-      <div class="arrow">→</div>
-      <div class="node"><strong>native-image --tool:svm-wasm</strong><span>Oracle GraalVM 25.1+. 아래 4단계를 수행</span></div>
-      <div class="arrow">→</div>
-      <div class="node"><strong>kotlinc.wasm + kotlinc.js</strong><span>약 75MB 번역본 + 작은 JS 포장지</span></div>
-    </div>
-  </div>
+fun main() {
+    val n = 2
+    for (k in 0..n) println("P(k=$k) = ${binomPmf(k, n, 0.5)}")
+}</textarea>
+<p><button id="run">Run</button> <span id="status"></span></p>
+<pre id="out"></pre>
 
-  <div class="between">↓ 블로그(정적 파일 호스팅)에 올림 ↓</div>
+<script>
+const $ = id => document.getElementById(id);
+const out = $("out");
+const print = (text, cls) => {
+  const line = document.createElement("div");
+  line.textContent = text;
+  if (cls) line.className = cls;
+  out.appendChild(line);
+};
 
-  <div class="stage run">
-    <div class="stage-head">② 실행 시점 · 독자 브라우저 · Run 누를 때마다</div>
-    <div class="flow">
-      <div class="node"><strong>독자가 쓴 코드</strong><span><code>binomial(2, 0.5)[1]</code> 같은 것</span></div>
-      <div class="arrow">→</div>
-      <div class="node"><strong>Worker A: kotlinc.wasm</strong><span>stdlib.klib + 내 라이브러리.klib 와 함께 컴파일</span></div>
-      <div class="arrow">→</div>
-      <div class="node"><strong>program.wasm</strong><span>독자 코드의 결과물</span></div>
-      <div class="arrow">→</div>
-      <div class="node"><strong>Worker B: 실행</strong><span>출력 <code>0.5</code>를 페이지에 표시</span></div>
-    </div>
-  </div>
+// 1) 컴파일러 Worker: GraalVM Web Image로 만든 kotlinc.wasm이 이 안에서 돈다.
+//    메시지 형식 { id, operation, text } → { id, answer(JSON 문자열) }
+let compiler, nextId = 1;
+const pending = new Map();
+function compile(source) {
+  if (!compiler) {
+    compiler = new Worker("kotlin-compiler-worker.js");
+    compiler.onmessage = ({ data }) => { pending.get(data.id)?.(data.answer); pending.delete(data.id); };
+  }
+  return new Promise(resolve => {
+    const id = nextId++;
+    pending.set(id, answer => resolve(JSON.parse(answer)));
+    compiler.postMessage({ id, operation: "compile", text: source });
+  });
+}
 
-  <div class="callout" style="margin-top:16px">
-    <p><strong>헷갈리기 쉬운 점: Wasm이 두 번 나온다.</strong></p>
-    <p>① <span class="b">kotlinc 자체</span>를 Wasm으로 만든 건 <strong>GraalVM Web Image</strong>가 한 일이다.<br>
-    ② <span class="r">독자 코드</span>를 Wasm으로 만드는 건 그 안에서 돌아가는 <strong>Kotlin 컴파일러의 Wasm 백엔드</strong>(Kotlin/Wasm)가 하는 일이다.<br>
-    서로 다른 두 도구가 각자 Wasm을 만든다. Worker는 화면을 멈추지 않게 뒤에서 일하는 별도 스레드다.</p>
-  </div>
-</section>
+// 2) 실행 Worker: 컴파일 결과(main.wasm + .mjs 3개)를 blob URL로 이어 붙여 실행한다.
+function run(files, timeoutMs = 10000) {
+  const bytes = name => Uint8Array.from(atob(files.find(f => f.name === name).content), c => c.charCodeAt(0));
+  const text = name => new TextDecoder().decode(bytes(name));
+  const blob = (content, type) => URL.createObjectURL(new Blob([content], { type }));
 
-<section>
-  <h2>번역기 안에서 일어나는 4단계</h2>
-  <p><code>native-image</code>가 <code>.jar</code>를 <code>.wasm</code>으로 바꿀 때 하는 일이다.</p>
-  <div class="steps">
-    <div class="step"><div class="n">1</div><div>
-      <h3>쓰이는 코드만 골라내기 (도달성 분석)</h3>
-      <p><code>main</code>에서 출발해 "실행될 수 있는" 메서드와 클래스만 따라가며 표시한다. 한 번도 닿지 않는 코드는 버린다.</p>
-      <p class="eg">대가: <strong>닫힌 세계(closed world)</strong>. 실행 중에 새 클래스를 불러오는 일이 불가능하다. 리플렉션처럼 "이름으로 나중에 찾는" 코드는 빌드 전에 목록(메타데이터)으로 알려줘야 한다. kotlinc 같은 큰 프로그램에서 이게 제일 손이 많이 가는 부분이다.</p>
-    </div></div>
-    <div class="step"><div class="n">2</div><div>
-      <h3>시작 상태를 미리 찍어두기 (이미지 힙)</h3>
-      <p>프로그램이 켜질 때 만드는 초기 객체 일부를 빌드 중에 미리 만들어 결과물 안에 사진처럼 저장한다.</p>
-      <p class="eg">효과: 브라우저에서 켜질 때 준비 작업이 줄어 빨리 시작한다.</p>
-    </div></div>
-    <div class="step"><div class="n">3</div><div>
-      <h3>Wasm 코드 생성 (WasmGC 사용)</h3>
-      <p>남은 메서드를 WebAssembly 명령으로 번역한다. 자바 객체는 <strong>WasmGC</strong> 객체로 바꾼다. 즉 메모리 정리(가비지 컬렉션)를 <strong>브라우저가 대신 해준다</strong>. JVM의 GC를 통째로 싣고 갈 필요가 없다.</p>
-      <p class="eg">그래서 WasmGC·예외 처리를 지원하는 최신 브라우저가 필요하다. 2024년 말부터 주요 브라우저 모두 지원한다. 마지막에 Binaryen의 <code>wasm-as</code>가 텍스트를 바이너리 <code>.wasm</code>으로 조립한다.</p>
-    </div></div>
-    <div class="step"><div class="n">4</div><div>
-      <h3>JS 포장지 붙이기</h3>
-      <p>Wasm은 혼자서는 콘솔 출력도, 파일 읽기도 못 한다. 그런 바깥일은 함께 생성되는 <code>.js</code>가 연결해 준다.</p>
-      <p class="eg">그래서 <code>.wasm</code> 단독으로는 못 돌린다. 반드시 JS 런타임(브라우저나 Node.js)이 같이 있어야 한다.</p>
-    </div></div>
-  </div>
-</section>
+  // 생성된 모듈은 './main.wasm' 같은 상대 경로로 서로를 부른다 → blob URL로 바꿔치기
+  const wasm = blob(bytes("main.wasm"), "application/wasm");
+  const builtins = blob(text("main.js-builtins.mjs"), "text/javascript");
+  const imports = blob(text("main.import-object.mjs").replaceAll("'./main.js-builtins.mjs'", `'${builtins}'`), "text/javascript");
+  const main = blob(text("main.mjs")
+    .replaceAll("'./main.import-object.mjs'", `'${imports}'`)
+    .replaceAll("new URL('./main.wasm',import.meta.url).href", `'${wasm}'`), "text/javascript");
 
-<section>
-  <h2>다른 방법과 비교</h2>
-  <div class="tbl">
-    <table>
-      <thead><tr><th>방법</th><th>번역 시점</th><th>브라우저가 받는 것</th><th>장점</th><th>단점</th></tr></thead>
-      <tbody>
-        <tr><td>Kotlin Playground</td><td>서버에서 매번</td><td>컴파일 결과만</td><td>공식, 가볍다</td><td>컴파일 서버 필요</td></tr>
-        <tr><td>CheerpJ / WebVM</td><td>실행 중 (에뮬레이션)</td><td>JVM 흉내 엔진 + jar</td><td>코드 수정 없이 돌아감</td><td>무겁고 느림, 비공식</td></tr>
-        <tr><td>TeaVM</td><td>빌드 때 (AOT)</td><td>JS/Wasm</td><td>javac로 이미 성공 사례</td><td>kotlinc로는 아무도 안 해봄</td></tr>
-        <tr class="hl"><td><strong>GraalVM Web Image</strong></td><td>빌드 때 (AOT)</td><td>kotlinc.wasm (~75MB)</td><td>진짜 K2 컴파일러, 서버 0개, 실제 작동 사례 있음</td><td>실험 단계, 다운로드 큼</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
+  // println → console.log 이므로 가로채서 페이지로 보낸다
+  const runner = blob(`
+    for (const level of ['log', 'info', 'warn', 'error', 'debug'])
+      console[level] = (...v) => postMessage({ output: v.map(String).join(' ') });
+    try { await import(${JSON.stringify(main)}); postMessage({ done: true }); }
+    catch (e) { postMessage({ done: true, error: String(e?.stack || e) }); }
+  `, "text/javascript");
 
-<section>
-  <h2>실제 숫자 (wasm-code-editor 기준)</h2>
-  <ul class="plain">
-    <li>다운로드: 컴파일러 약 <span class="mono">75 MB</span> + 표준 라이브러리 <span class="mono">12 MB</span>. 페이지 열 때가 아니라 첫 Run 때 받고, 이후엔 브라우저 캐시.</li>
-    <li>첫 컴파일 약 <span class="mono">5초</span>, 그 다음부터 약 <span class="mono">1초</span>.</li>
-    <li>빌드에 필요: Oracle GraalVM <span class="mono">25.1+</span>, Binaryen <span class="mono">119+</span>. 독자는 아무것도 설치하지 않는다.</li>
-  </ul>
-</section>
+  return new Promise(resolve => {
+    const worker = new Worker(runner, { type: "module" });
+    const finish = error => { clearTimeout(timer); worker.terminate(); resolve(error); };
+    const timer = setTimeout(() => finish(`${timeoutMs / 1000}초가 지나 중단했습니다`), timeoutMs);
+    worker.onmessage = ({ data }) => data.done ? finish(data.error) : print(data.output);
+    worker.onerror = e => finish(e.message);
+  });
+}
 
-<section>
-  <h2>내 수학 블로그에 쓰려면</h2>
-  <div class="callout">
-    <p>남은 빈칸은 하나다. 그 프로젝트는 아직 <strong>표준 라이브러리만</strong> 붙여서 컴파일한다. 내 라이브러리도 stdlib과 같은 형태(Wasm용 <code>.klib</code>)로 빌드해 컴파일러에 함께 넘기면 될 것으로 보이지만, 아직 누가 해본 기록은 없다.</p>
-  </div>
-  <div class="steps" style="margin-top:16px">
-    <div class="step"><div class="n" style="color:var(--run)">1</div><div><p>wasm-code-editor를 Oracle GraalVM으로 빌드해 <code>println("hello")</code>가 브라우저에서 도는지 확인.</p></div></div>
-    <div class="step"><div class="n" style="color:var(--run)">2</div><div><p><code>binomPmf</code> 하나만 든 작은 라이브러리를 Wasm <code>.klib</code>으로 빌드.</p></div></div>
-    <div class="step"><div class="n" style="color:var(--run)">3</div><div><p>브라우저 안 컴파일러가 그 <code>.klib</code>을 받아 <code>binomPmf(1, 2, 0.5)</code> → <code>0.5</code>를 출력하면 성공.</p></div></div>
-  </div>
-  <p style="margin-top:12px">빌드·배포 전에 라이선스도 확인할 것: 해당 레포는 라이선스 표기가 없고, Oracle GraalVM은 자체 약관이 있다.</p>
-</section>
-
-<section>
-  <h2>용어 정리</h2>
-  <dl class="gloss">
-    <dt>JVM</dt><dd>자바 가상 머신. 바이트코드를 실행하는 프로그램. kotlinc도 여기서 돈다.</dd>
-    <dt>바이트코드</dt><dd><code>.class</code> 파일 안의 중간 언어. JVM만 읽을 수 있다.</dd>
-    <dt>AOT / JIT</dt><dd>미리 번역 / 실행하면서 번역.</dd>
-    <dt>WebAssembly</dt><dd>브라우저가 직접 실행하는 저수준 바이너리 형식. <code>.wasm</code>.</dd>
-    <dt>WasmGC</dt><dd>Wasm에 추가된 기능. 객체 메모리 정리를 브라우저가 맡는다.</dd>
-    <dt>klib</dt><dd>Kotlin 라이브러리 파일 형식. Wasm/JS/Native 타깃용 라이브러리가 이 형태다.</dd>
-    <dt>Web Worker</dt><dd>페이지와 별도로 뒤에서 도는 스레드. 무거운 컴파일 중에도 화면이 멈추지 않는다.</dd>
-    <dt>Binaryen</dt><dd>Wasm 도구 모음. Web Image가 마지막 조립에 쓴다.</dd>
-  </dl>
-</section>
-
-<footer class="src">
-  출처:
-  <a href="https://www.graalvm.org/latest/reference-manual/web-image/">GraalVM Web Image 문서</a> ·
-  <a href="https://github.com/oracle/graal/tree/master/web-image">oracle/graal web-image</a> ·
-  <a href="https://github.com/alex28sh/wasm-code-editor">alex28sh/wasm-code-editor</a> ·
-  <a href="https://graalvm.github.io/graalvm-demos/native-image/wasm-javac/">GraalVM javac-on-Wasm 데모</a> ·
-  <a href="https://github.com/konsoletyper/teavm-javac">teavm-javac</a>
-</footer>
-</main>
+$("run").onclick = async () => {
+  const button = $("run");
+  button.disabled = true;
+  out.textContent = "";
+  const started = performance.now();
+  $("status").textContent = compiler ? "컴파일 중…" : "컴파일러 내려받고 컴파일 중…";
+  try {
+    const result = await compile($("src").value);
+    if (result.error) throw new Error(result.error);
+    for (const d of result.diagnostics) print(`${d.severity}: ${d.message}`, d.severity === "ERROR" ? "err" : "");
+    if (result.ok) {
+      $("status").textContent = `컴파일 ${result.milliseconds}ms · 실행 중…`;
+      const error = await run(result.files);
+      if (error) print(error, "err");
+    }
+    $("status").textContent = `완료 (${Math.round(performance.now() - started)}ms)`;
+  } catch (e) {
+    print(String(e.message || e), "err");
+    $("status").textContent = "실패";
+  }
+  button.disabled = false;
+};
+</script>
 </body>
 </html>
