@@ -388,9 +388,9 @@ document.getElementById("share").onclick = async () => {
   try { await navigator.clipboard.writeText(url); print("링크를 복사했습니다.", "sys"); }
   catch { print(url, "sys"); }
 };
-let initial = EXAMPLES["이항분포 PMF"];
+let initial = EXAMPLES["Hello"];
 const m = location.hash.match(/code=([\w-]+)/);
-if (m) { try { initial = dec(m[1]); sel.value = ""; } catch {} } else sel.value = "이항분포 PMF";
+if (m) { try { initial = dec(m[1]); sel.value = ""; } catch {} } else sel.value = "Hello";
 editor.setValue(initial);
 
 const root = document.documentElement;
