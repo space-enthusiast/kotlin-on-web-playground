@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works | Kotlin on Web Playground</title>
+<meta name="description" content="How the real Kotlin compiler and Analysis API run inside a browser tab, built with GraalVM Web Image.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+:root {
+  --kt: #7f52ff; --kt-wash: rgba(127,82,255,.07); --kt-line: rgba(127,82,255,.35);
+  --bg: #ffffff; --side: #f7f7f8; --ink: #19191c; --text: #2c2c30; --muted: #6f6f78; --line: #e6e6ea;
+  --code-bg: #f4f4f6; --head: #19191c; --head-ink: #fff;
+  --syn-k: #0033b3; --syn-s: #067d17; --syn-c: #8c8c8c; --syn-n: #1750eb;
+  --sans: "Inter", "Noto Sans KR", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+:root[data-theme="dark"] {
+  --kt-wash: rgba(127,82,255,.14); --bg: #19191c; --side: #1f1f22; --ink: #f0f0f2; --text: #d7d7dc; --muted: #9a9aa5; --line: #303035;
+  --code-bg: #232327; --head: #0f0f11; --syn-k: #cf8e6d; --syn-s: #6aab73; --syn-c: #7a7e85; --syn-n: #2aacb8;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 72px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); }
+a { color: var(--kt); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+
+/* header */
+.top { position: sticky; top: 0; z-index: 20; height: 56px; display: flex; align-items: center; gap: 24px; padding: 0 24px; background: var(--head); color: var(--head-ink); }
+.top .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 600; }
+.top .brand svg { width: 22px; height: 22px; }
+.top nav { display: flex; gap: 4px; }
+.top nav a { color: rgba(255,255,255,.75); padding: 6px 10px; border-radius: 6px; font-size: 14px; }
+.top nav a:hover { color: #fff; text-decoration: none; background: rgba(255,255,255,.08); }
+.top nav a.on { color: #fff; box-shadow: inset 0 -2px 0 var(--kt); border-radius: 0; }
+.top .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.seg { display: inline-flex; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; overflow: hidden; }
+.seg button { background: none; border: 0; color: rgba(255,255,255,.7); font: 600 12px var(--sans); padding: 5px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: #fff; color: #19191c; }
+.ibtn { background: none; border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 6px; padding: 4px 9px; cursor: pointer; }
+
+/* layout */
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 220px; min-height: calc(100vh - 56px); }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 24px 0; position: sticky; top: 56px; height: calc(100vh - 56px); overflow: auto; }
+.side .group { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 24px; margin: 4px 0 8px; }
+.side a { display: block; padding: 6px 24px; color: var(--text); font-size: 14px; border-left: 3px solid transparent; }
+.side a:hover { background: var(--kt-wash); text-decoration: none; }
+.side a.on { border-left-color: var(--kt); background: var(--kt-wash); color: var(--ink); font-weight: 600; }
+article { padding: 40px 56px 80px; max-width: 900px; min-width: 0; }
+.crumbs { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+h1 { font-size: 40px; line-height: 1.2; color: var(--ink); margin: 0 0 8px; font-weight: 700; letter-spacing: -.01em; }
+.meta { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+h2 { font-size: 26px; color: var(--ink); margin: 48px 0 12px; padding-top: 8px; font-weight: 600; }
+h3 { font-size: 19px; color: var(--ink); margin: 28px 0 8px; font-weight: 600; }
+p, li { max-width: 72ch; }
+ul, ol { padding-left: 22px; }
+li { margin-bottom: 6px; }
+.note { border-left: 4px solid var(--kt); background: var(--kt-wash); border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 20px 0; }
+.note b:first-child { display: block; color: var(--ink); margin-bottom: 2px; }
+.note.tip { border-left-color: #21a366; background: rgba(33,163,102,.08); }
+pre.code { background: var(--code-bg); border-radius: 8px; padding: 14px 18px; overflow-x: auto; font: 13.5px/1.6 var(--mono); margin: 16px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 16px 0; }
+.tbl { overflow-x: auto; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--ink); background: var(--side); }
+.toc { position: sticky; top: 56px; height: calc(100vh - 56px); overflow: auto; padding: 40px 24px 24px 8px; font-size: 13px; }
+.toc .label { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 11.5px; margin-bottom: 8px; }
+.toc a { display: block; color: var(--muted); padding: 4px 0 4px 12px; border-left: 2px solid var(--line); }
+.toc a.on { color: var(--kt); border-left-color: var(--kt); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+.pager a { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; flex: 1; }
+.pager a small { display: block; color: var(--muted); font-size: 12px; }
+.pager a:last-child { text-align: right; }
+
+/* whiteboard (sequence diagram + step tour) */
+.wb { border: 1px solid var(--line); border-radius: 10px; margin: 20px 0 8px; overflow: hidden; }
+.wb-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--side); font: 600 13px var(--mono); color: var(--ink); }
+.wb-head .badge { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.wb-head .stops { margin-left: auto; color: var(--muted); font-weight: 400; }
+.wb-svg { overflow-x: auto; padding: 8px 6px 10px; background-image: radial-gradient(circle at 1px 1px, var(--line) .9px, transparent 1px); background-size: 22px 22px; }
+.wb svg { display: block; margin: 0 auto; }
+.wb svg .lane rect { fill: var(--bg); stroke: var(--muted); stroke-opacity: .5; }
+.wb svg .lane text { fill: var(--ink); font: 500 11.5px var(--mono); }
+.wb svg .life { stroke: var(--muted); stroke-opacity: .45; stroke-dasharray: 3 4; }
+.wb svg .msg { cursor: pointer; }
+.wb svg .msg .hit { fill: transparent; }
+.wb svg .msg path, .wb svg .msg line { stroke: var(--muted); fill: none; stroke-width: 1.2; }
+.wb svg .msg .head { fill: var(--muted); stroke: none; }
+.wb svg .msg text.lbl { fill: var(--muted); font: 11px var(--mono); }
+.wb svg .msg circle { fill: var(--bg); stroke: var(--muted); }
+.wb svg .msg text.num { fill: var(--muted); font: 600 9.5px var(--mono); }
+.wb svg .msg.on path, .wb svg .msg.on line { stroke: var(--kt); stroke-width: 2.2; }
+.wb svg .msg.on .head { fill: var(--kt); }
+.wb svg .msg.on text.lbl { fill: var(--kt); font-weight: 600; }
+.wb svg .msg.on circle { fill: var(--kt); stroke: var(--kt); }
+.wb svg .msg.on text.num { fill: #fff; }
+.wb-step { border-top: 1px solid var(--line); padding: 18px 20px 20px; }
+.wb-step .kicker { font: 600 11px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.wb-step h4 { margin: 4px 0 2px; font-size: 19px; color: var(--kt); }
+.wb-step .route { font: 12.5px var(--mono); color: var(--muted); margin-bottom: 12px; }
+.wb-step .why { border: 1px solid var(--kt-line); background: var(--kt-wash); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 15px; }
+.wb-step .why b { display: block; font: 600 11px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--kt); }
+.wb-step p { margin: 0 0 10px; font-size: 15px; }
+.wb-step .file { display: flex; gap: 8px; align-items: center; font: 12px var(--mono); color: var(--muted); margin-top: 6px; }
+.wb-step pre { margin: 6px 0 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.6 var(--mono); }
+.wb-nav { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; border-top: 1px solid var(--line); background: var(--side); }
+.wb-nav button { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; cursor: pointer; color: var(--text); font: 13px var(--sans); }
+.wb-nav button:hover:not(:disabled) { border-color: var(--kt); color: var(--kt); }
+.wb-nav button:disabled { opacity: .4; cursor: default; }
+.wb-nav span { font: 12.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tk-k { color: var(--syn-k); } .tk-s { color: var(--syn-s); } .tk-c { color: var(--syn-c); font-style: italic; } .tk-n { color: var(--syn-n); }
+
+@media (max-width: 1180px) { .layout { grid-template-columns: 240px minmax(0, 1fr); } .toc { display: none; } }
+@media (max-width: 820px) {
+  .layout { grid-template-columns: 1fr; } .side { display: none; }
+  article { padding: 28px 16px 64px; } h1 { font-size: 32px; } .top { padding: 0 16px; gap: 12px; } .top .brand span { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="g" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e44857"/><stop offset=".5" stop-color="#c711e1"/><stop offset="1" stop-color="#7f52ff"/></linearGradient></defs><path d="M24 24H0V0h24L12 12z" fill="url(#g)"/></svg><span>Kotlin on Web</span></a>
+  <nav><a href="./" data-i18n="nav.playground">Playground</a><a href="./how-it-works.html" class="on" data-i18n="nav.how">How it works</a></nav>
+  <div class="right">
+    <div class="seg" role="group" aria-label="Language"><button data-lang="en" aria-pressed="true">EN</button><button data-lang="ko" aria-pressed="false">KO</button></div>
+    <button class="ibtn" id="theme" title="Theme">◐</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <div class="group" data-i18n="side.group">How it works</div>
+    <a href="#overview" data-i18n="h.overview">Overview</a>
+    <a href="#two-layers" data-i18n="h.layers">Two layers of WebAssembly</a>
+    <a href="#build" data-i18n="h.build">Building the compiler</a>
+    <a href="#run" data-i18n="h.run">Running your code</a>
+    <a href="#analysis" data-i18n="h.analysis">Autocomplete and diagnostics</a>
+    <a href="#windows" data-i18n="h.windows">Building on Windows</a>
+    <a href="#limits" data-i18n="h.limits">Limitations</a>
+    <a href="#credits" data-i18n="h.credits">Credits</a>
+  </aside>
+
+  <article>
+    <div class="crumbs"><a href="./" data-i18n="nav.playground">Playground</a> / <span data-i18n="nav.how">How it works</span></div>
+    <h1 data-i18n="title">How it works</h1>
+    <div class="meta" data-i18n="meta">Kotlin 2.5.0-dev-9169 · Oracle GraalVM 25.4 · Last modified: October 18, 2026</div>
+
+    <section id="overview">
+      <p data-i18n-html="ov.p1">The <a href="./">playground</a> compiles and runs Kotlin <b>without any server</b>. Your code never leaves the browser tab: the real Kotlin compiler (K2) and the Kotlin Analysis API are downloaded once as WebAssembly modules and run inside Web Workers.</p>
+      <p data-i18n-html="ov.p2">Both modules are the official JVM jars, translated ahead of time to WebAssembly by <b>GraalVM Web Image</b> (<code>native-image --tool:svm-wasm</code>). Nothing is rewritten from the compiler sources.</p>
+      <div class="note"><b data-i18n="ov.note.t">What the server does</b><span data-i18n-html="ov.note.b">GitHub Pages only serves static files: <code>index.html</code>, two <code>.wasm</code> modules (about 70 MB each) and the standard library (12 MB). Compilation, execution and analysis all happen on your machine.</span></div>
+    </section>
+
+    <section id="two-layers">
+      <h2 data-i18n="h.layers">Two layers of WebAssembly</h2>
+      <p data-i18n-html="layers.p1">The word <i>WebAssembly</i> appears twice in this project, for two different reasons:</p>
+      <div class="tbl"><table>
+        <thead><tr><th data-i18n="layers.th1">Layer</th><th data-i18n="layers.th2">Made by</th><th data-i18n="layers.th3">When</th><th data-i18n="layers.th4">What it is</th></tr></thead>
+        <tbody>
+          <tr><td data-i18n="layers.r1c1">The compiler</td><td>GraalVM Web Image</td><td data-i18n="layers.r1c3">Once, at build time</td><td data-i18n-html="layers.r1c4"><code>kotlin-compiler.jar</code> translated to <code>.wasm</code></td></tr>
+          <tr><td data-i18n="layers.r2c1">Your program</td><td data-i18n="layers.r2c2">Kotlin/Wasm backend</td><td data-i18n="layers.r2c3">Every time you press Run</td><td data-i18n-html="layers.r2c4">Your source compiled to <code>main.wasm</code></td></tr>
+        </tbody>
+      </table></div>
+      <p data-i18n-html="layers.p2">In other words, a compiler that <i>is</i> WebAssembly produces a program that is <i>also</i> WebAssembly.</p>
+      <div class="note tip"><b data-i18n="layers.tip.t">Web Image is a translator, not a JVM</b><span data-i18n-html="layers.tip.b">GraalVM is only needed on the build machine. It analyzes the jar ahead of time (AOT) and emits WasmGC code, so the browser runs the compiler with no JVM at all. Garbage collection is done by the browser itself.</span></div>
+    </section>
+
+    <section id="build">
+      <h2 data-i18n="h.build">Building the compiler</h2>
+      <p data-i18n="build.p1">This happens once, on a developer machine. Click an arrow or use the buttons to walk through the steps.</p>
+      <div class="wb" data-seq="build"></div>
+    </section>
+
+    <section id="run">
+      <h2 data-i18n="h.run">Running your code</h2>
+      <p data-i18n="run.p1">This happens every time you press Run. Only the first run downloads the compiler; later runs take about two seconds.</p>
+      <div class="wb" data-seq="run"></div>
+    </section>
+
+    <section id="analysis">
+      <h2 data-i18n="h.analysis">Autocomplete and diagnostics</h2>
+      <p data-i18n-html="an.p1">A second module, built the same way from the <b>Kotlin Analysis API</b> (the engine IntelliJ IDEA uses), runs in its own worker. The editor asks it two kinds of questions:</p>
+      <ul>
+        <li data-i18n-html="an.li1"><code>analyze(source)</code>: 300 ms after you stop typing. The answer becomes the red and yellow underlines.</li>
+        <li data-i18n-html="an.li2"><code>complete(source, offset)</code>: when you type <code>.</code> or press <kbd>Ctrl</kbd>+<kbd>Space</kbd>. The answer becomes the suggestion list.</li>
+      </ul>
+      <pre class="code" data-hl>// worker message → answer (JSON)
+{ "operation": "complete", "text": source, "argument": "46" }
+→ { "from": 46, "items": [{ "label": "length", "kind": "property", "detail": "Int" }, ...] }</pre>
+      <p data-i18n-html="an.p2">Each request builds a fresh analysis session over one source file that depends on the standard library klib, then disposes it. On small files a request takes about 150 to 700 ms.</p>
+    </section>
+
+    <section id="windows">
+      <h2 data-i18n="h.windows">Building on Windows</h2>
+      <p data-i18n="win.p1">The original project was built on Linux. Building the same images on Windows needed five fixes:</p>
+      <div class="tbl"><table>
+        <thead><tr><th data-i18n="win.th1">Problem</th><th data-i18n="win.th2">Fix</th></tr></thead>
+        <tbody>
+          <tr><td data-i18n-html="win.r1a">GraalVM 25.0 (LTS) ignores <code>--tool:svm-wasm</code></td><td data-i18n-html="win.r1b">Use the 25.4 innovation release (<code>25i4</code>)</td></tr>
+          <tr><td data-i18n-html="win.r2a">Native Image compiles small C query files even for Wasm</td><td data-i18n-html="win.r2b">Install Visual Studio Build Tools (C++), so <code>cl.exe</code> exists</td></tr>
+          <tr><td data-i18n-html="win.r3a"><code>@Delete methods should have a single callee</code></td><td data-i18n-html="win.r3b">The Windows JDK registers <code>SunMSCAPI</code> (crypt32/ncrypt). Build with a <code>java.security</code> that leaves it out</td></tr>
+          <tr><td data-i18n-html="win.r4a"><code>The command line is too long</code></td><td data-i18n-html="win.r4b">Pass the Analysis API classpath through a <code>@argfile</code></td></tr>
+          <tr><td data-i18n-html="win.r5a">Scenario checks fail at wrong offsets</td><td data-i18n-html="win.r5b">Git checked the sample out with CRLF line endings; convert it to LF</td></tr>
+        </tbody>
+      </table></div>
+      <pre class="code" data-hl>native-image --tool:svm-wasm \
+  -J-Djava.security.properties==no-mscapi.security \
+  -J-Xmx24g -Os -H:ImageHeapObjectsPerFunction=20000 \
+  -cp &lt;patched jars&gt; editor.compilerhost.web.WebMain</pre>
+    </section>
+
+    <section id="limits">
+      <h2 data-i18n="h.limits">Limitations</h2>
+      <ul>
+        <li data-i18n="lim.1">First visit downloads about 160 MB (cached afterwards).</li>
+        <li data-i18n="lim.2">One file and the standard library only. No other libraries yet.</li>
+        <li data-i18n-html="lim.3">No threads: programs run single-threaded and are stopped after 10 seconds.</li>
+        <li data-i18n-html="lim.4">Completion after <code>.</code> does not offer extension functions such as <code>uppercase()</code>.</li>
+        <li data-i18n="lim.5">GraalVM Web Image is still experimental.</li>
+      </ul>
+    </section>
+
+    <section id="credits">
+      <h2 data-i18n="h.credits">Credits</h2>
+      <p data-i18n-html="cred.p1">The compiler and analysis hosts, the bytecode patches and the worker protocol come from <a href="https://github.com/alex28sh/wasm-code-editor">alex28sh/wasm-code-editor</a>. Built with <a href="https://www.graalvm.org/latest/reference-manual/web-image/">GraalVM Web Image</a> and <a href="https://github.com/WebAssembly/binaryen">Binaryen</a>. The editor is <a href="https://codemirror.net/5/">CodeMirror 5</a>, like the official Kotlin Playground.</p>
+    </section>
+
+    <div class="pager">
+      <a href="./"><small data-i18n="pager.prev">Previous</small><span data-i18n="pager.play">← Kotlin Playground</span></a>
+      <a href="https://github.com/space-enthusiast/kotlin-on-web-playground"><small data-i18n="pager.next">Source</small>GitHub →</a>
+    </div>
+  </article>
+
+  <aside class="toc">
+    <div class="label" data-i18n="toc">On this page</div>
+    <a href="#overview" data-i18n="h.overview">Overview</a>
+    <a href="#two-layers" data-i18n="h.layers">Two layers of WebAssembly</a>
+    <a href="#build" data-i18n="h.build">Building the compiler</a>
+    <a href="#run" data-i18n="h.run">Running your code</a>
+    <a href="#analysis" data-i18n="h.analysis">Autocomplete and diagnostics</a>
+    <a href="#windows" data-i18n="h.windows">Building on Windows</a>
+    <a href="#limits" data-i18n="h.limits">Limitations</a>
+    <a href="#credits" data-i18n="h.credits">Credits</a>
+  </aside>
+</div>
+
+<script>
+const KO = {
+  "nav.playground": "플레이그라운드", "nav.how": "동작 원리", "side.group": "동작 원리", "title": "동작 원리",
+  "meta": "Kotlin 2.5.0-dev-9169 · Oracle GraalVM 25.4 · 최종 수정: 2026년 10월 18일",
+  "h.overview": "개요", "h.layers": "WebAssembly가 두 겹인 이유", "h.build": "컴파일러 빌드하기", "h.run": "코드가 실행되는 과정",
+  "h.analysis": "자동완성과 오류 표시", "h.windows": "Windows에서 빌드하기", "h.limits": "한계", "h.credits": "만든 것들", "toc": "이 페이지",
+  "ov.p1": "<a href=\"./\">플레이그라운드</a>는 <b>서버 없이</b> Kotlin을 컴파일하고 실행합니다. 코드는 브라우저 탭 밖으로 나가지 않습니다. 진짜 Kotlin 컴파일러(K2)와 Kotlin Analysis API를 WebAssembly 모듈로 한 번 내려받아 Web Worker 안에서 돌립니다.",
+  "ov.p2": "두 모듈 모두 공식 JVM jar를 <b>GraalVM Web Image</b>(<code>native-image --tool:svm-wasm</code>)로 미리 WebAssembly로 번역한 것입니다. 컴파일러 소스를 다시 짠 부분은 없습니다.",
+  "ov.note.t": "서버가 하는 일", "ov.note.b": "GitHub Pages는 정적 파일만 줍니다. <code>index.html</code>, <code>.wasm</code> 모듈 2개(각 약 70MB), 표준 라이브러리(12MB)입니다. 컴파일, 실행, 분석은 전부 내 컴퓨터에서 일어납니다.",
+  "layers.p1": "이 프로젝트에는 <i>WebAssembly</i>가 서로 다른 이유로 두 번 나옵니다.",
+  "layers.th1": "층", "layers.th2": "만드는 것", "layers.th3": "언제", "layers.th4": "정체",
+  "layers.r1c1": "컴파일러", "layers.r1c3": "빌드할 때 한 번", "layers.r1c4": "<code>kotlin-compiler.jar</code>를 <code>.wasm</code>으로 번역한 것",
+  "layers.r2c1": "내 프로그램", "layers.r2c2": "Kotlin/Wasm 백엔드", "layers.r2c3": "Run 누를 때마다", "layers.r2c4": "내 소스를 <code>main.wasm</code>으로 컴파일한 것",
+  "layers.p2": "즉, WebAssembly로 된 컴파일러가 또 다른 WebAssembly 프로그램을 만듭니다.",
+  "layers.tip.t": "Web Image는 JVM이 아니라 번역기", "layers.tip.b": "GraalVM은 빌드하는 컴퓨터에만 필요합니다. jar를 미리(AOT) 분석해 WasmGC 코드를 만들기 때문에, 브라우저는 JVM 없이 컴파일러를 실행합니다. 메모리 정리(GC)는 브라우저가 직접 합니다.",
+  "build.p1": "개발자 컴퓨터에서 한 번만 일어나는 과정입니다. 화살표를 누르거나 버튼으로 단계를 넘겨 보세요.",
+  "run.p1": "Run을 누를 때마다 일어나는 과정입니다. 컴파일러는 첫 실행 때만 내려받고, 이후 실행은 약 2초 걸립니다.",
+  "an.p1": "같은 방식으로 <b>Kotlin Analysis API</b>(IntelliJ IDEA가 쓰는 엔진)를 빌드한 두 번째 모듈이 별도 Worker에서 돕니다. 편집기는 두 가지를 묻습니다.",
+  "an.li1": "<code>analyze(source)</code>: 입력을 멈추고 300ms 뒤. 답이 빨간·노란 밑줄이 됩니다.",
+  "an.li2": "<code>complete(source, offset)</code>: <code>.</code>를 치거나 <kbd>Ctrl</kbd>+<kbd>Space</kbd>를 누를 때. 답이 추천 목록이 됩니다.",
+  "an.p2": "요청마다 표준 라이브러리 klib에 의존하는 소스 파일 하나로 분석 세션을 새로 만들고 끝나면 버립니다. 작은 파일 기준 요청 하나에 약 150~700ms 걸립니다.",
+  "win.p1": "원작자는 Linux에서 빌드했습니다. 같은 이미지를 Windows에서 빌드하려면 다섯 가지를 고쳐야 했습니다.",
+  "win.th1": "문제", "win.th2": "해결",
+  "win.r1a": "GraalVM 25.0(LTS)은 <code>--tool:svm-wasm</code>을 무시함", "win.r1b": "25.4 Innovation 릴리스(<code>25i4</code>) 사용",
+  "win.r2a": "Wasm 빌드여도 Native Image가 작은 C 질의 파일을 컴파일함", "win.r2b": "Visual Studio Build Tools(C++) 설치로 <code>cl.exe</code> 확보",
+  "win.r3a": "<code>@Delete methods should have a single callee</code>", "win.r3b": "Windows JDK가 등록하는 <code>SunMSCAPI</code>(crypt32/ncrypt)가 원인. 이를 뺀 <code>java.security</code>로 빌드",
+  "win.r4a": "<code>The command line is too long</code>", "win.r4b": "Analysis API classpath를 <code>@argfile</code>로 전달",
+  "win.r5a": "시나리오 검사가 엉뚱한 offset에서 실패", "win.r5b": "git이 샘플 파일을 CRLF로 체크아웃함. LF로 변환",
+  "lim.1": "첫 방문 때 약 160MB를 내려받습니다(이후 캐시).", "lim.2": "파일 하나와 표준 라이브러리만 됩니다. 다른 라이브러리는 아직 안 됩니다.",
+  "lim.3": "스레드가 없습니다. 프로그램은 단일 스레드로 돌고 10초가 지나면 중단됩니다.",
+  "lim.4": "<code>.</code> 뒤 자동완성에 <code>uppercase()</code> 같은 확장 함수는 나오지 않습니다.", "lim.5": "GraalVM Web Image는 아직 실험 단계입니다.",
+  "cred.p1": "컴파일러·분석기 host, 바이트코드 패치, Worker 통신 방식은 <a href=\"https://github.com/alex28sh/wasm-code-editor\">alex28sh/wasm-code-editor</a>에서 가져왔습니다. <a href=\"https://www.graalvm.org/latest/reference-manual/web-image/\">GraalVM Web Image</a>와 <a href=\"https://github.com/WebAssembly/binaryen\">Binaryen</a>으로 빌드했고, 편집기는 공식 Kotlin Playground처럼 <a href=\"https://codemirror.net/5/\">CodeMirror 5</a>입니다.",
+  "pager.prev": "이전", "pager.play": "← Kotlin 플레이그라운드", "pager.next": "소스",
+  "wb.why": "왜 필요한가", "wb.prev": "← 이전", "wb.next": "다음 →", "wb.step": "단계", "wb.of": "/", "wb.stops": "단계"
+};
+const EN_UI = { "wb.why": "Why it's needed", "wb.prev": "← Previous", "wb.next": "Next →", "wb.step": "Step", "wb.of": "of", "wb.stops": "stops" };
+
+const SRC_CLIENT = "kotlin-compiler-client.mjs", SRC_GLUE = "worker-glue.js", SRC_README = "compiler-host/README.md";
+const SEQS = {
+  run: {
+    title: { en: "Run → compile → execute", ko: "Run 클릭 → 컴파일 → 실행" },
+    lanes: { en: ["You", "index.html", "Worker A\nkotlinc.wasm", "Jimfs\nin-memory files", "Worker B\nyour program"],
+             ko: ["독자", "index.html", "Worker A\nkotlinc.wasm", "Jimfs\n메모리 파일시스템", "Worker B\n독자 프로그램"] },
+    steps: [
+      { f:0, t:1, lbl:"Run",
+        en:{ title:"You press Run", why:"This is the starting point: the source text the compiler needs comes from here.", body:["The Kotlin source in the editor is just a string. So far the only thing fetched from the server is static HTML, and no compile server will ever appear."] },
+        ko:{ title:"Run을 누른다", why:"출발점입니다. 컴파일러에 넘길 소스 문자열이 여기서 생깁니다.", body:["편집기의 Kotlin 소스는 그냥 문자열입니다. 지금까지 서버에서 받은 건 정적 HTML뿐이고, 이후에도 컴파일 서버는 등장하지 않습니다."] },
+        code:{ file:"editor", text:'fun main() {\n    println("Hello, Kotlin!")\n}' } },
+      { f:1, t:2, lbl:"new Worker(\n'kotlin-compiler-worker.js')",
+        en:{ title:"Start the compiler worker", why:"Compiling on the page's main thread would freeze the UI for seconds. A worker keeps the page responsive, and the 70 MB download starts only when needed.", body:["The browser downloads the script GraalVM generated plus its <code>.wasm</code> and instantiates it."] },
+        ko:{ title:"컴파일러 Worker를 띄운다", why:"페이지(메인 스레드)에서 컴파일하면 몇 초간 화면이 멈춥니다. Worker에 두면 페이지는 계속 반응하고, 70MB 다운로드도 필요할 때만 일어납니다.", body:["브라우저가 GraalVM이 만든 스크립트와 <code>.wasm</code>을 받아 인스턴스화합니다."] },
+        code:{ file:SRC_CLIENT, text:"const worker = new Worker(\n    new URL(`./kotlin-${name}-worker.js`, import.meta.url));" } },
+      { f:2, t:2, lbl:"wait for host",
+        en:{ title:"The compiler wakes up inside Wasm", why:"Loading Wasm is asynchronous. Requests sent before the host exists would fail, so the glue waits for it.", body:["Once loaded, the generated script publishes <code>kotlinCompilerHost</code> as a global. From here on, real K2 compiler code runs in Worker A with no JVM: Java objects are WasmGC objects collected by the browser."] },
+        ko:{ title:"Wasm 속 컴파일러가 깨어난다", why:"Wasm 로딩은 비동기라 언제 끝날지 모릅니다. host가 생기기 전에 요청하면 실패하므로 기다립니다.", body:["로드가 끝나면 생성된 스크립트가 전역에 <code>kotlinCompilerHost</code>를 공개합니다. 이때부터 Worker A 안에서 JVM 없이 진짜 K2 컴파일러가 돕니다. 자바 객체는 브라우저가 정리하는 WasmGC 객체입니다."] },
+        code:{ file:SRC_GLUE, text:"while (!globalThis.kotlinCompilerHost)\n    await new Promise(r => setTimeout(r, 20));" } },
+      { f:2, t:3, lbl:"init(stdlib, Base64)",
+        en:{ title:"Unpack the standard library into memory", why:"The compiler reads declarations like println from stdlib files. A browser has no disk, so they go into an in-memory file system.", body:["Web Image has no zip support, so the 12 MB klib was repacked at build time as a simple count/name/size/bytes stream that the host unpacks into Jimfs."] },
+        ko:{ title:"표준 라이브러리를 메모리에 푼다", why:"컴파일러는 println 같은 선언을 stdlib 파일에서 읽습니다. 브라우저엔 디스크가 없으니 메모리 파일시스템에 깔아 둡니다.", body:["Web Image엔 zip 해제가 없어서, 12MB klib을 빌드 때 개수·이름·크기·바이트 순서의 단순 묶음으로 바꿔 두었고 host가 이를 Jimfs에 풉니다."] },
+        code:{ file:SRC_GLUE, text:"const res = await fetch('./kotlin-stdlib-wasm-js.bin');\nhost().call('init', btoa(binary), '');" } },
+      { f:1, t:2, lbl:"postMessage\n{operation:'compile'}",
+        en:{ title:"Send the source to the worker", why:"A worker cannot read page variables; messages are the only channel. The id pairs each answer with its request.", body:["Each request gets an id, and the matching answer resolves its Promise."] },
+        ko:{ title:"소스를 Worker로 보낸다", why:"Worker는 페이지 변수를 못 읽습니다. 메시지가 유일한 통로이고, id로 답과 요청을 짝짓습니다.", body:["요청마다 id를 붙이고, 같은 id의 답이 오면 Promise를 풉니다."] },
+        code:{ file:SRC_CLIENT, text:"pending.set(id, resolve);\nworker.postMessage({ id, operation, text, argument });" } },
+      { f:2, t:3, lbl:"① source → klib\n(-nopack)",
+        en:{ title:"Pass 1: source to library", why:"Kotlin/Wasm compiles in two passes. This pass type-checks your code, so compile errors come from here.", body:["The host calls <code>KotlinWasmCompiler</code> with ordinary command-line arguments. K2 checks the code and writes IR as an unpacked klib (no zip)."] },
+        ko:{ title:"1차: 소스 → 라이브러리", why:"Kotlin/Wasm은 두 번에 나눠 컴파일합니다. 이 단계에서 타입 검사를 하므로 컴파일 오류가 여기서 나옵니다.", body:["host가 평범한 명령줄 인자로 <code>KotlinWasmCompiler</code>를 호출합니다. K2가 코드를 검사하고 IR을 압축하지 않은 klib으로 씁니다."] },
+        code:{ file:SRC_README, text:"1. sources to an unpacked klib (-nopack);\n2. that klib to an executable\n   (-Xinclude, -Xir-produce-js, -Xir-dce)." } },
+      { f:2, t:3, lbl:"② klib + stdlib → main.wasm",
+        en:{ title:"Pass 2: link into a Wasm program", why:"IR cannot run. Linking with the stdlib produces real Wasm, and -Xir-dce strips everything you don't use.", body:["This is where the second layer of WebAssembly is born: a Wasm compiler emitting another Wasm module."] },
+        ko:{ title:"2차: Wasm 프로그램으로 링크", why:"IR은 실행할 수 없습니다. stdlib과 링크해야 진짜 Wasm이 되고, -Xir-dce가 안 쓰는 코드를 지웁니다.", body:["여기서 두 번째 WebAssembly가 생깁니다. Wasm 컴파일러가 또 다른 Wasm 모듈을 만듭니다."] },
+        code:{ file:"output", text:"main.wasm\nmain.mjs\nmain.import-object.mjs\nmain.js-builtins.mjs" } },
+      { f:2, t:1, lbl:"{ok, diagnostics,\nfiles[Base64]}",
+        en:{ title:"Return the result as JSON", why:"The files live in Worker A's memory; a message is the only way out, so binaries travel as Base64 text.", body:["Diagnostics carry severity, message and source offsets, which the editor turns into clickable positions."] },
+        ko:{ title:"결과를 JSON으로 돌려준다", why:"파일은 Worker A 메모리 안에 있습니다. 밖으로 꺼낼 방법은 메시지뿐이라 바이너리를 Base64 문자로 보냅니다.", body:["diagnostics에는 심각도, 메시지, 소스 offset이 담겨 편집기에서 클릭 가능한 위치가 됩니다."] },
+        code:{ file:"compile → answer", text:'{ "ok": true, "exitCode": "OK",\n  "diagnostics": [],\n  "files": [{ "name": "main.wasm", "content": "AGFzbQ..." }] }' } },
+      { f:1, t:4, lbl:"blob URLs\nnew Worker(module)",
+        en:{ title:"Create a worker for your program", why:"Your code might loop forever. Running it in a third worker lets the page kill it without touching the compiler.", body:["The generated modules import each other by relative paths, but the files exist only in memory. Each becomes a <code>blob:</code> URL and the import strings are rewritten."] },
+        ko:{ title:"실행용 Worker를 만든다", why:"독자 코드가 무한루프일 수 있습니다. 세 번째 Worker에서 돌리면 컴파일러는 건드리지 않고 이것만 죽일 수 있습니다.", body:["생성된 모듈은 상대 경로로 서로를 import하지만 파일은 메모리에만 있습니다. 각각을 <code>blob:</code> URL로 만들고 import 문자열을 바꿔치기합니다."] },
+        code:{ file:"index.html", text:"const wasm = blob(bytes('main.wasm'), 'application/wasm');\nconst main = blob(text('main.mjs')\n  .replaceAll(\"new URL('./main.wasm',import.meta.url).href\", `'${wasm}'`));" } },
+      { f:4, t:4, lbl:"import(main.mjs)\n→ main()",
+        en:{ title:"Your program runs", why:"Kotlin/Wasm's println calls console.log, which only shows in DevTools. Overriding it routes output to the page.", body:["Importing the module instantiates <code>main.wasm</code> and calls <code>main()</code>."] },
+        ko:{ title:"독자 프로그램이 실행된다", why:"Kotlin/Wasm의 println은 console.log를 부르는데, 이건 개발자도구에만 보입니다. 가로채야 페이지에 출력됩니다.", body:["모듈을 import하면 <code>main.wasm</code>이 인스턴스화되고 <code>main()</code>이 호출됩니다."] },
+        code:{ file:"runner", text:"console.log = (...v) => postMessage({ output: v.join(' ') });\nawait import(MAIN_URL);\npostMessage({ done: true });" } },
+      { f:4, t:1, lbl:"postMessage {output}",
+        en:{ title:"Output streams back line by line", why:"One message per println means long-running programs show output immediately.", body:["When the program finishes, <code>{done: true}</code> arrives; an exception arrives as a stack trace."] },
+        ko:{ title:"출력이 한 줄씩 돌아온다", why:"println 한 번이 메시지 하나라서 오래 도는 프로그램도 출력이 바로 보입니다.", body:["끝나면 <code>{done: true}</code>가, 예외가 나면 스택 트레이스가 옵니다."] },
+        code:{ file:"index.html", text:"w.onmessage = ({ data }) =>\n  data.done ? finish(data.error) : print(data.output);" } },
+      { f:1, t:0, lbl:"console\n(10 s limit)",
+        en:{ title:"Show the result and clean up", why:"Without a time limit an infinite loop would burn CPU forever. Revoking blob URLs avoids memory leaks, and keeping Worker A alive makes the next run fast.", body:["Throughout the whole flow, the server only served static files."] },
+        ko:{ title:"결과를 보여 주고 정리한다", why:"시간 제한이 없으면 무한루프가 CPU를 계속 씁니다. blob URL을 해제해 메모리 누수를 막고, Worker A를 살려 둬 다음 실행을 빠르게 합니다.", body:["전 과정에서 서버는 정적 파일만 줬습니다."] },
+        code:{ file:"index.html", text:"setTimeout(() => finish('stopped after 10 s'), 10000);\n// finish: worker.terminate(); urls.forEach(URL.revokeObjectURL);" } }
+    ]
+  },
+  build: {
+    title: { en: "kotlin-compiler.jar → kotlinc.wasm (once)", ko: "kotlin-compiler.jar → kotlinc.wasm (한 번만)" },
+    lanes: { en: ["Developer", "Gradle", "PatchJars", "JVM +\ntracing agent", "native-image\n--tool:svm-wasm", "Binaryen\nwasm-as"],
+             ko: ["개발자", "Gradle", "PatchJars", "JVM +\n추적 에이전트", "native-image\n--tool:svm-wasm", "Binaryen\nwasm-as"] },
+    steps: [
+      { f:0, t:1, lbl:"compilerDist",
+        en:{ title:"Start the build", why:"Web Image exists only in Oracle GraalVM 25.1+. Gradle runs the remaining steps in order.", body:["Each image takes a few minutes and around 10 GB of memory."] },
+        ko:{ title:"빌드 시작", why:"Web Image는 Oracle GraalVM 25.1 이상에만 있습니다. Gradle이 나머지 단계를 순서대로 실행합니다.", body:["이미지 하나에 몇 분, 메모리 약 10GB가 듭니다."] },
+        code:{ file:"terminal", text:"./gradlew :compiler-host:compilerDist" } },
+      { f:1, t:1, lbl:"download kotlin-compiler.jar",
+        en:{ title:"Fetch the official compiler jar", why:"Translating the published jar, rather than writing a new compiler, means the browser compiler behaves exactly like kotlinc.", body:["<code>org.jetbrains.kotlin:kotlin-compiler</code> and its dependencies come straight from Maven."] },
+        ko:{ title:"공식 컴파일러 jar를 받는다", why:"새 컴파일러를 짜지 않고 공개된 jar를 번역하므로, 브라우저 컴파일러가 kotlinc와 똑같이 동작합니다.", body:["<code>org.jetbrains.kotlin:kotlin-compiler</code>와 의존성을 Maven에서 그대로 받습니다."] } },
+      { f:1, t:2, lbl:"patchJars",
+        en:{ title:"Patch what Web Image cannot handle", why:"kotlinc assumes a JVM with threads and management beans. The browser has neither, so those spots are rewritten before translation.", body:["The rewritten classes go first on the classpath."] },
+        ko:{ title:"Web Image가 못 다루는 부분을 고친다", why:"kotlinc는 스레드와 JVM 관리 기능이 있다고 가정합니다. 브라우저엔 둘 다 없어서 번역 전에 고칩니다.", body:["고친 클래스를 classpath 맨 앞에 둡니다."] },
+        code:{ file:SRC_README, text:"Atomic*FieldUpdater → reflection Field reads/writes\nThreadMXBean CPU time → 0\nmonitorenter/exit in coroutines → removed\nthread pool execute → empty body" } },
+      { f:2, t:1, lbl:"patched .class files",
+        en:{ title:"Patched classes shadow the originals", why:"The original jars stay untouched, so upgrading Kotlin only means re-running the patcher.", body:["When several jars contain a class, the first on the classpath wins."] },
+        ko:{ title:"고친 클래스가 원본을 덮는다", why:"원본 jar는 그대로 두므로 Kotlin을 올릴 때 패치만 다시 돌리면 됩니다.", body:["같은 클래스가 여러 jar에 있으면 classpath 앞쪽이 이깁니다."] } },
+      { f:1, t:3, lbl:"jvmScenario\n-agentlib:native-image-agent",
+        en:{ title:"Rehearse on a real JVM", why:"Web Image is a closed world: it must know everything that will run. Reflection can't be seen statically, so a real run records it.", body:["A sample program is compiled on the JVM while GraalVM's tracing agent logs every reflective access."] },
+        ko:{ title:"진짜 JVM에서 예행연습", why:"Web Image는 닫힌 세계라 실행될 것을 미리 다 알아야 합니다. 리플렉션은 코드만 봐선 모르니 실제로 돌려 기록합니다.", body:["JVM에서 샘플을 컴파일하며 GraalVM 추적 에이전트가 리플렉션 접근을 모두 기록합니다."] } },
+      { f:3, t:1, lbl:"reachability metadata",
+        en:{ title:"Get the reflection list", why:"Passing it to native-image keeps those classes in the image. Anything missing fails only in the browser.", body:["Unexercised features can throw <code>MissingReflectionRegistrationError</code> in the image."] },
+        ko:{ title:"리플렉션 목록이 나온다", why:"이 목록을 native-image에 넘겨야 해당 클래스가 결과물에 남습니다. 빠지면 브라우저에서만 실패합니다.", body:["예행연습에서 안 써 본 기능은 이미지에서 <code>MissingReflectionRegistrationError</code>를 낼 수 있습니다."] } },
+      { f:1, t:4, lbl:"native-image --tool:svm-wasm",
+        en:{ title:"Start the AOT translation", why:"This is the actual jar → wasm step; everything before only prepares for it.", body:["V8 rejects functions larger than about 7.6 MB, so heap-initialization functions are split up."] },
+        ko:{ title:"AOT 번역 시작", why:"이게 실제 jar → wasm 단계이고, 앞 단계는 모두 이를 위한 준비입니다.", body:["V8은 약 7.6MB가 넘는 함수를 거부해서 힙 초기화 함수를 잘게 나눕니다."] },
+        code:{ file:"build.gradle.kts", text:"native-image --tool:svm-wasm \\\n  -J-Xmx24g -Os \\\n  -H:ImageHeapObjectsPerFunction=20000 ..." } },
+      { f:4, t:4, lbl:"reachability · image heap\n· WasmGC codegen",
+        en:{ title:"Inside the translator", why:"Reachability drops unused code, the image heap shortens startup, and WasmGC means no garbage collector needs to be shipped.", body:["Starting from <code>main</code>, only reachable methods are kept, some startup objects are pre-built, and methods become Wasm."] },
+        ko:{ title:"번역기 내부", why:"도달성 분석은 안 쓰는 코드를 버리고, 이미지 힙은 시작 시간을 줄이고, WasmGC 덕분에 GC를 따로 싣지 않습니다.", body:["<code>main</code>에서 닿는 메서드만 남기고, 시작 객체 일부를 미리 만들어 두고, 메서드를 Wasm으로 바꿉니다."] } },
+      { f:4, t:5, lbl:"Wasm text",
+        en:{ title:"Assemble the binary", why:"native-image writes the text format; browsers execute only the binary format.", body:["Binaryen's <code>wasm-as</code> (119+) assembles it."] },
+        ko:{ title:"바이너리로 조립", why:"native-image는 텍스트 형식을 내놓는데 브라우저는 바이너리만 실행합니다.", body:["Binaryen의 <code>wasm-as</code>(119 이상)가 조립합니다."] } },
+      { f:5, t:1, lbl:".wasm (~70 MB)",
+        en:{ title:"The translated compiler", why:"This file is what lets a browser run kotlinc without a JVM.", body:["About 70 MB uncompressed; Brotli shrinks a similar image to roughly a quarter."] },
+        ko:{ title:"번역된 컴파일러", why:"이 파일 덕분에 브라우저가 JVM 없이 kotlinc를 돌립니다.", body:["압축 전 약 70MB이고, 비슷한 이미지가 Brotli로 약 4분의 1이 됐습니다."] } },
+      { f:1, t:0, lbl:"worker.js + .wasm\n+ stdlib.bin",
+        en:{ title:"Three files to deploy", why:"The generated script doesn't speak the page's message protocol; the appended glue wires messages to host.call. Static hosting is enough.", body:["The script loads the <code>.wasm</code> next to it by name, so both must share a name."] },
+        ko:{ title:"배포 파일 3종", why:"생성된 스크립트는 페이지와 메시지를 주고받을 줄 모릅니다. 덧붙인 glue가 메시지와 host.call을 잇습니다. 정적 호스팅이면 충분합니다.", body:["스크립트가 이름으로 옆의 <code>.wasm</code>을 찾으므로 둘의 이름이 같아야 합니다."] },
+        code:{ file:"build/compilerDist", text:"kotlin-compiler-worker.js\nkotlin-compiler-worker.js.wasm\nkotlin-stdlib-wasm-js.bin" } }
+    ]
+  }
+};
+
+// ---------- i18n ----------
+const EN = {};
+document.querySelectorAll("[data-i18n]").forEach(el => EN[el.dataset.i18n] = el.textContent);
+document.querySelectorAll("[data-i18n-html]").forEach(el => EN[el.dataset.i18nHtml] = el.innerHTML);
+let lang = "en";
+const t = key => (lang === "ko" ? KO[key] : (EN[key] ?? EN_UI[key])) ?? EN_UI[key] ?? key;
+function applyLang(next) {
+  lang = next;
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-html]").forEach(el => el.innerHTML = t(el.dataset.i18nHtml));
+  document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+  document.title = (lang === "ko" ? "동작 원리" : "How it works") + " | Kotlin on Web Playground";
+  try { localStorage.setItem("kp-lang", lang); } catch {}
+  boards.forEach(b => b.render());
+}
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => applyLang(b.dataset.lang));
+
+// ---------- highlighting ----------
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function hl(code) {
+  const re = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|await|new|return|for|of|while|fun|val|import|true|false)\b|\b(\d+(?:\.\d+)?)\b/gm;
+  let out = "", last = 0, m;
+  while ((m = re.exec(code))) { out += esc(code.slice(last, m.index)); out += `<span class="tk-${m[1] ? "c" : m[2] ? "s" : m[3] ? "k" : "n"}">${esc(m[0])}</span>`; last = re.lastIndex; }
+  return out + esc(code.slice(last));
+}
+document.querySelectorAll("pre[data-hl]").forEach(p => p.innerHTML = hl(p.textContent));
+
+// ---------- whiteboard ----------
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+function multiText(parent, x, y, lines, cls) {
+  const tx = el("text", { x, y, class: cls, "text-anchor": "middle" }, parent);
+  lines.forEach((ln, i) => { const s = el("tspan", { x, dy: i ? 13 : 0 }, tx); s.textContent = ln; });
+}
+function makeBoard(root) {
+  const seq = SEQS[root.dataset.seq];
+  let cur = 0;
+  root.innerHTML = `<div class="wb-head"><span class="badge">SEQ</span><span class="ttl"></span><span class="stops"></span></div>
+    <div class="wb-svg"><svg></svg></div><div class="wb-step"></div>
+    <div class="wb-nav"><button class="prev"></button><span class="pos"></span><button class="next"></button></div>`;
+  const svg = root.querySelector("svg"), stepBox = root.querySelector(".wb-step");
+  root.querySelector(".prev").onclick = () => go(cur - 1);
+  root.querySelector(".next").onclick = () => go(cur + 1);
+  function draw() {
+    const lanes = seq.lanes[lang];
+    svg.innerHTML = "";
+    const laneW = 128, gap = 10, top = 12, boxH = 40, rowH = 52, first = top + boxH + 40;
+    const W = lanes.length * laneW + (lanes.length - 1) * gap + 8, H = first + seq.steps.length * rowH;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+    const cx = i => 4 + i * (laneW + gap) + laneW / 2;
+    lanes.forEach((name, i) => {
+      el("line", { x1: cx(i), x2: cx(i), y1: top + boxH, y2: H - 4, class: "life" }, svg);
+      const g = el("g", { class: "lane" }, svg);
+      el("rect", { x: cx(i) - laneW / 2, y: top, width: laneW, height: boxH, rx: 5 }, g);
+      const ls = name.split("\n");
+      multiText(g, cx(i), top + boxH / 2 + (ls.length > 1 ? -3 : 4), ls, "");
+    });
+    seq.steps.forEach((st, i) => {
+      const y = first + i * rowH, x1 = cx(st.f), x2 = cx(st.t), lines = st.lbl.split("\n");
+      const g = el("g", { class: "msg", tabindex: "0", role: "button", "aria-label": `${i + 1}: ${st[lang].title}`, "data-i": i }, svg);
+      if (st.f === st.t) {
+        el("rect", { class: "hit", x: x1 - 8, y: y - 26, width: laneW / 2 + 70, height: rowH - 6 }, g);
+        el("path", { d: `M${x1} ${y - 6} h30 v14 h-26` }, g);
+        el("path", { class: "head", d: `M${x1 + 4} ${y + 8} l7 -4 v8 z` }, g);
+        const tx = el("text", { x: x1 + 38, y: y + (lines.length > 1 ? -5 : 5), class: "lbl" }, g);
+        lines.forEach((ln, k) => { const s = el("tspan", { x: x1 + 38, dy: k ? 13 : 0 }, tx); s.textContent = ln; });
+      } else {
+        const dir = x2 > x1 ? 1 : -1;
+        el("rect", { class: "hit", x: Math.min(x1, x2), y: y - 28, width: Math.abs(x2 - x1), height: rowH - 6 }, g);
+        el("line", { x1: x1 + dir * 9, y1: y, x2: x2 - dir * 2, y2: y }, g);
+        el("path", { class: "head", d: `M${x2} ${y} l${-dir * 8} -4.5 v9 z` }, g);
+        multiText(g, (x1 + x2) / 2, y - 7 - (lines.length - 1) * 13, lines, "lbl");
+      }
+      el("circle", { cx: x1, cy: y, r: 8 }, g);
+      const n = el("text", { x: x1, y: y + 3.3, class: "num", "text-anchor": "middle" }, g); n.textContent = i + 1;
+      g.addEventListener("click", () => go(i));
+      g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(i); } });
+    });
+  }
+  function go(i) {
+    cur = Math.max(0, Math.min(seq.steps.length - 1, i));
+    const st = seq.steps[cur], d = st[lang], lanes = seq.lanes[lang];
+    svg.querySelectorAll(".msg").forEach(g => g.classList.toggle("on", +g.dataset.i === cur));
+    stepBox.innerHTML = `<div class="kicker">${t("wb.step")} ${cur + 1} ${t("wb.of")} ${seq.steps.length}</div>
+      <h4>${esc(d.title)}</h4><div class="route">${esc(lanes[st.f].replace("\n", " "))} → ${esc(lanes[st.t].replace("\n", " "))}</div>
+      <div class="why"><b>${t("wb.why")}</b>${d.why}</div>${d.body.map(p => `<p>${p}</p>`).join("")}
+      ${st.code ? `<div class="file">▸ ${esc(st.code.file)}</div><pre>${hl(st.code.text)}</pre>` : ""}`;
+    root.querySelector(".pos").textContent = `${cur + 1} / ${seq.steps.length}`;
+    root.querySelector(".prev").disabled = cur === 0;
+    root.querySelector(".next").disabled = cur === seq.steps.length - 1;
+  }
+  return {
+    render() {
+      root.querySelector(".ttl").textContent = seq.title[lang];
+      root.querySelector(".stops").textContent = `${seq.steps.length} ${t("wb.stops")}`;
+      root.querySelector(".prev").textContent = t("wb.prev");
+      root.querySelector(".next").textContent = t("wb.next");
+      draw(); go(cur);
+    }
+  };
+}
+const boards = [...document.querySelectorAll(".wb")].map(makeBoard);
+
+// ---------- theme, TOC highlight, initial language ----------
+const root = document.documentElement;
+function setTheme(th) { root.dataset.theme = th; try { localStorage.setItem("kp-theme", th); } catch {} }
+let savedTheme = null; try { savedTheme = localStorage.getItem("kp-theme"); } catch {}
+setTheme(savedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+document.getElementById("theme").onclick = () => setTheme(root.dataset.theme === "dark" ? "light" : "dark");
+
+const sections = [...document.querySelectorAll("article section[id]")];
+const navLinks = [...document.querySelectorAll(".toc a, .side a")];
+const spy = () => {
+  let id = sections[0].id;
+  for (const s of sections) if (s.getBoundingClientRect().top < 120) id = s.id;
+  navLinks.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+};
+addEventListener("scroll", spy, { passive: true });
+
+let initialLang = new URLSearchParams(location.search).get("lang");
+if (!initialLang) { try { initialLang = localStorage.getItem("kp-lang"); } catch {} }
+applyLang(initialLang === "ko" ? "ko" : "en");
+spy();
+</script>
+</body>
+</html>
