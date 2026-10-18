@@ -4,19 +4,126 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kotlin on Web Playground</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/darcula.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/idea.min.css">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 16px; }
-  textarea { width: 100%; height: 220px; font: 14px/1.5 ui-monospace, Consolas, monospace; box-sizing: border-box; }
-  pre { background: #111; color: #ddd; padding: 12px; min-height: 80px; white-space: pre-wrap; }
-  .err { color: #ff7b72; }
+:root {
+  --kt: #7f52ff; --kt-2: #e44857; --kt-3: #c711e1;
+  --bg: #ffffff; --panel: #f7f7f9; --ink: #19191c; --muted: #6b6b75; --line: #e4e4ea;
+  --console-bg: #fbfbfc; --err: #d32f2f; --warn: #b26a00; --ok: #2e7d32;
+  --sans: "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+:root[data-theme="dark"] {
+  --bg: #19191c; --panel: #222226; --ink: #e8e8ec; --muted: #9a9aa5; --line: #34343a;
+  --console-bg: #1e1e21; --err: #ff6b6b; --warn: #ffb74d; --ok: #81c784;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); display: flex; flex-direction: column; }
+button, select { font: inherit; color: inherit; }
+
+header { display: flex; align-items: center; gap: 14px; padding: 10px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; margin-right: auto; }
+.brand svg { width: 26px; height: 26px; }
+.brand small { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.field label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.field .val, .field select { font-family: var(--mono); font-size: 12.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.chip { font-family: var(--mono); font-size: 12px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); white-space: nowrap; }
+.chip::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--muted); vertical-align: 1px; }
+.chip.loading::before { background: var(--warn); animation: pulse 1s infinite alternate; }
+.chip.ready::before { background: var(--ok); }
+.chip.fail::before { background: var(--err); }
+@keyframes pulse { to { opacity: .3; } }
+.icon-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.icon-btn:hover { border-color: var(--kt); }
+.run { display: inline-flex; align-items: center; gap: 8px; background: var(--kt); color: #fff; border: 0; border-radius: 6px; padding: 8px 18px; font-weight: 600; cursor: pointer; }
+.run:hover { filter: brightness(1.08); }
+.run:disabled { opacity: .6; cursor: progress; }
+.run svg { width: 12px; height: 12px; }
+
+main { flex: 1; display: grid; grid-template-rows: minmax(0, 1fr) 6px minmax(120px, 34%); min-height: 0; }
+.editor-wrap { min-height: 0; position: relative; }
+.CodeMirror { height: 100%; font-family: var(--mono); font-size: 14px; line-height: 1.6; }
+.cm-s-idea.CodeMirror { background: var(--bg); }
+.cm-s-darcula.CodeMirror { background: var(--bg); }
+.CodeMirror-gutters { border-right: 1px solid var(--line) !important; background: var(--bg) !important; }
+.CodeMirror-lint-markers { width: 14px; }
+.resizer { cursor: row-resize; background: var(--line); }
+.console { display: flex; flex-direction: column; min-height: 0; background: var(--console-bg); }
+.console-head { display: flex; align-items: center; gap: 12px; padding: 6px 20px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.console-head strong { color: var(--ink); font-weight: 600; }
+.console-head .sp { margin-left: auto; }
+#out { flex: 1; overflow: auto; margin: 0; padding: 12px 20px; font: 13px/1.6 var(--mono); white-space: pre-wrap; }
+#out .err { color: var(--err); }
+#out .warn { color: var(--warn); }
+#out .sys { color: var(--muted); font-style: italic; }
+#out a { color: var(--kt); cursor: pointer; text-decoration: underline; }
+
+/* completion popup */
+.CodeMirror-hints { font-family: var(--mono); font-size: 13px; border-radius: 6px; padding: 3px 0; max-height: 18em; z-index: 50; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.CodeMirror-hint { color: var(--ink); padding: 2px 10px 2px 6px; display: flex; gap: 8px; align-items: center; max-width: 60ch; }
+li.CodeMirror-hint-active { background: var(--kt); color: #fff; }
+.hk { width: 18px; height: 18px; border-radius: 4px; display: inline-grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #fff; flex: none; }
+.hk.f { background: #e8833a; } .hk.v { background: #9b59b6; } .hk.c { background: #3d8bfd; } .hk.k { background: #6b6b75; } .hk.p { background: #2aa198; } .hk.o { background: #888; }
+.hd { color: var(--muted); margin-left: auto; padding-left: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+li.CodeMirror-hint-active .hd { color: rgba(255,255,255,.8); }
+.CodeMirror-lint-tooltip { font-family: var(--mono); font-size: 12.5px; z-index: 60; }
+
+footer { padding: 6px 20px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--line); }
+footer kbd { font-family: var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+@media (max-width: 640px) { header { padding: 10px 12px; } .hide-sm { display: none; } }
 </style>
 </head>
 <body>
-<h1>Kotlin on Web Playground</h1>
-<p>서버 없이 브라우저 안에서 진짜 Kotlin 컴파일러(K2, Wasm으로 변환됨)가 컴파일하고 실행합니다.
-첫 Run은 컴파일러(약 75MB)를 내려받느라 시간이 걸립니다.</p>
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="g" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e44857"/><stop offset=".5" stop-color="#c711e1"/><stop offset="1" stop-color="#7f52ff"/></linearGradient></defs><path d="M24 24H0V0h24L12 12z" fill="url(#g)"/></svg>
+    Kotlin Playground <small>on Web · in-browser compiler</small>
+  </div>
+  <div class="field hide-sm"><label>Kotlin</label><span class="val">2.5.0-dev-9169</span></div>
+  <div class="field hide-sm"><label>Target</label><span class="val">Wasm · 브라우저 안 컴파일</span></div>
+  <div class="field"><label for="examples">Example</label>
+    <select id="examples"></select>
+  </div>
+  <span class="chip loading" id="chip-compiler" title="kotlinc (Web Image)">compiler</span>
+  <span class="chip loading" id="chip-analysis" title="Analysis API (Web Image)">analysis</span>
+  <button class="icon-btn" id="share" title="코드를 담은 링크 복사">Share</button>
+  <button class="icon-btn" id="theme" title="테마 전환">◐</button>
+  <button class="run" id="run" title="Ctrl+Enter"><svg viewBox="0 0 10 12"><path d="M0 0l10 6-10 6z" fill="currentColor"/></svg>Run</button>
+</header>
 
-<textarea id="src" spellcheck="false">import kotlin.math.pow
+<main>
+  <div class="editor-wrap"><textarea id="code"></textarea></div>
+  <div class="resizer" id="resizer" title="드래그해서 크기 조절"></div>
+  <section class="console">
+    <div class="console-head"><strong>Console</strong><span id="status">대기 중</span><span class="sp"></span><button class="icon-btn" id="clear">Clear</button></div>
+    <pre id="out"></pre>
+  </section>
+</main>
+<footer><kbd>Ctrl</kbd>+<kbd>Enter</kbd> 실행 · <kbd>Ctrl</kbd>+<kbd>Space</kbd> 자동완성 · <kbd>.</kbd> 입력 시 멤버 추천 · 컴파일러와 분석기는 GraalVM Web Image로 Wasm이 된 진짜 K2이며, 모든 처리는 이 탭 안에서 일어납니다.</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+<script>
+// ---------- examples ----------
+const EXAMPLES = {
+  "Hello": `fun main() {
+    val name = "Kotlin"
+    println("Hello, $name! 이 코드는 브라우저 안에서 컴파일됐어요.")
+}`,
+  "이항분포 PMF": `import kotlin.math.pow
+import kotlin.math.roundToInt
 
 fun choose(n: Int, k: Int): Long =
     (1..k).fold(1L) { acc, i -> acc * (n - k + i) / i }
@@ -25,91 +132,297 @@ fun binomPmf(k: Int, n: Int, p: Double): Double =
     choose(n, k) * p.pow(k) * (1 - p).pow(n - k)
 
 fun main() {
-    val n = 2
-    for (k in 0..n) println("P(k=$k) = ${binomPmf(k, n, 0.5)}")
-}</textarea>
-<p><button id="run">Run</button> <span id="status"></span></p>
-<pre id="out"></pre>
+    val n = 10
+    val p = 0.5
+    for (k in 0..n) {
+        val prob = binomPmf(k, n, p)
+        val bar = "█".repeat((prob * 100).toInt())
+        val rounded = (prob * 10000).roundToInt() / 10000.0
+        println("k=\${k.toString().padStart(2)}  \${rounded.toString().padEnd(6)}  $bar")
+    }
+}`,
+  "Pmf 클래스": `class Pmf<T>(private val probs: Map<T, Double>) {
+    operator fun get(x: T): Double = probs[x] ?: 0.0
 
-<script>
-const $ = id => document.getElementById(id);
-const out = $("out");
-const print = (text, cls) => {
-  const line = document.createElement("div");
-  line.textContent = text;
-  if (cls) line.className = cls;
-  out.appendChild(line);
-};
+    fun normalized(): Pmf<T> {
+        val total = probs.values.sum()
+        return Pmf(probs.mapValues { it.value / total })
+    }
 
-// 1) 컴파일러 Worker: GraalVM Web Image로 만든 kotlinc.wasm이 이 안에서 돈다.
-//    메시지 형식 { id, operation, text } → { id, answer(JSON 문자열) }
-let compiler, nextId = 1;
-const pending = new Map();
-function compile(source) {
-  if (!compiler) {
-    compiler = new Worker("kotlin-compiler-worker.js");
-    compiler.onmessage = ({ data }) => { pending.get(data.id)?.(data.answer); pending.delete(data.id); };
-  }
-  return new Promise(resolve => {
-    const id = nextId++;
-    pending.set(id, answer => resolve(JSON.parse(answer)));
-    compiler.postMessage({ id, operation: "compile", text: source });
-  });
+    operator fun times(likelihood: (T) -> Double) =
+        Pmf(probs.mapValues { (x, p) -> p * likelihood(x) })
+
+    fun mean(toDouble: (T) -> Double) = probs.entries.sumOf { toDouble(it.key) * it.value }
+
+    override fun toString() = probs.entries.joinToString("\\n") { "\${it.key}\\t\${it.value}" }
 }
 
-// 2) 실행 Worker: 컴파일 결과(main.wasm + .mjs 3개)를 blob URL로 이어 붙여 실행한다.
-function run(files, timeoutMs = 10000) {
+fun main() {
+    // 동전 앞면 확률 가설 0.0, 0.1, ..., 1.0 — 균등 사전분포
+    val hypos = (0..10).map { it / 10.0 }
+    val prior = Pmf(hypos.associateWith { 1.0 })
+
+    // 앞면 관측 1번 → 사후분포
+    val posterior = (prior * { p -> p }).normalized()
+    println(posterior)
+    println("평균 = \${posterior.mean { it }}")
+}`,
+  "컬렉션 & data class": `data class Person(val name: String, val age: Int)
+
+fun main() {
+    val people = listOf(
+        Person("Alice", 29), Person("Bob", 31),
+        Person("Carol", 24), Person("Dave", 31),
+    )
+    val byAge = people.groupBy { it.age }
+    println(byAge)
+    println(people.maxBy { it.age })
+    println(people.sortedBy { it.name }.map { it.name.uppercase() })
+}`,
+  "컴파일 오류 예시": `fun main() {
+    val count: Int = "three"
+    println(undefinedThing)
+}`
+};
+
+// ---------- workers (GraalVM Web Image) ----------
+function service(name, chipId) {
+  const chip = document.getElementById(chipId);
+  let worker = null, nextId = 1, failed = null;
+  const pending = new Map();
+  function start() {
+    if (worker) return;
+    worker = new Worker(`kotlin-${name}-worker.js`);
+    worker.onmessage = ({ data }) => { const r = pending.get(data.id); pending.delete(data.id); r && r(data.answer); };
+    worker.onerror = e => {
+      failed = JSON.stringify({ error: e.message || `${name} worker를 불러오지 못했습니다` });
+      chip.className = "chip fail"; chip.title = failed;
+      for (const r of pending.values()) r(failed);
+      pending.clear();
+    };
+  }
+  return {
+    get available() { return !failed; },
+    request(operation, text, argument = "") {
+      start();
+      if (failed) return Promise.resolve(JSON.parse(failed));
+      return new Promise(resolve => {
+        const id = nextId++;
+        pending.set(id, answer => {
+          const json = JSON.parse(answer);
+          if (!json.error) chip.className = "chip ready";
+          resolve(json);
+        });
+        worker.postMessage({ id, operation, text, argument });
+      });
+    }
+  };
+}
+const compiler = service("compiler", "chip-compiler");
+const analysis = service("analysis", "chip-analysis");
+
+// ---------- run compiled program in its own worker ----------
+function runProgram(files, onOutput, timeoutMs = 10000) {
   const bytes = name => Uint8Array.from(atob(files.find(f => f.name === name).content), c => c.charCodeAt(0));
   const text = name => new TextDecoder().decode(bytes(name));
-  const blob = (content, type) => URL.createObjectURL(new Blob([content], { type }));
-
-  // 생성된 모듈은 './main.wasm' 같은 상대 경로로 서로를 부른다 → blob URL로 바꿔치기
+  const urls = [];
+  const blob = (content, type) => { const u = URL.createObjectURL(new Blob([content], { type })); urls.push(u); return u; };
   const wasm = blob(bytes("main.wasm"), "application/wasm");
   const builtins = blob(text("main.js-builtins.mjs"), "text/javascript");
   const imports = blob(text("main.import-object.mjs").replaceAll("'./main.js-builtins.mjs'", `'${builtins}'`), "text/javascript");
   const main = blob(text("main.mjs")
     .replaceAll("'./main.import-object.mjs'", `'${imports}'`)
     .replaceAll("new URL('./main.wasm',import.meta.url).href", `'${wasm}'`), "text/javascript");
-
-  // println → console.log 이므로 가로채서 페이지로 보낸다
   const runner = blob(`
     for (const level of ['log', 'info', 'warn', 'error', 'debug'])
-      console[level] = (...v) => postMessage({ output: v.map(String).join(' ') });
+      console[level] = (...v) => postMessage({ output: v.map(String).join(' '), level });
     try { await import(${JSON.stringify(main)}); postMessage({ done: true }); }
-    catch (e) { postMessage({ done: true, error: String(e?.stack || e) }); }
-  `, "text/javascript");
-
+    catch (e) { postMessage({ done: true, error: String(e?.stack || e) }); }`, "text/javascript");
   return new Promise(resolve => {
-    const worker = new Worker(runner, { type: "module" });
-    const finish = error => { clearTimeout(timer); worker.terminate(); resolve(error); };
-    const timer = setTimeout(() => finish(`${timeoutMs / 1000}초가 지나 중단했습니다`), timeoutMs);
-    worker.onmessage = ({ data }) => data.done ? finish(data.error) : print(data.output);
-    worker.onerror = e => finish(e.message);
+    const w = new Worker(runner, { type: "module" });
+    const finish = error => { clearTimeout(timer); w.terminate(); urls.forEach(URL.revokeObjectURL); resolve(error); };
+    const timer = setTimeout(() => finish(`${timeoutMs / 1000}초가 지나 실행을 중단했습니다`), timeoutMs);
+    w.onmessage = ({ data }) => data.done ? finish(data.error) : onOutput(data.output, data.level);
+    w.onerror = e => finish(e.message || "프로그램을 시작하지 못했습니다");
   });
 }
 
-$("run").onclick = async () => {
-  const button = $("run");
-  button.disabled = true;
+// ---------- editor ----------
+const KEYWORDS = "as break class continue do else false for fun if in interface is null object package return super this throw true try typealias val var when while by catch constructor data enum finally import init inline internal lateinit open operator override private protected public sealed suspend vararg companion abstract const".split(" ");
+const BUILTINS = "println print readln listOf mutableListOf setOf mapOf mutableMapOf arrayOf emptyList repeat require check error TODO buildString lazy run let apply also with takeIf".split(" ");
+
+let hintSeq = 0, lintSeq = 0;
+const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+  mode: "text/x-kotlin", lineNumbers: true, indentUnit: 4, tabSize: 4, indentWithTabs: false,
+  matchBrackets: true, autoCloseBrackets: true, styleActiveLine: true,
+  gutters: ["CodeMirror-lint-markers"], lint: { getAnnotations: lintAsync, async: true, delay: 400 },
+  extraKeys: {
+    "Ctrl-Enter": () => run(), "Cmd-Enter": () => run(),
+    "Ctrl-Space": cm => cm.showHint({ hint: hintAsync, completeSingle: false }),
+    "Tab": cm => cm.somethingSelected() ? cm.indentSelection("add") : cm.replaceSelection("    ", "end")
+  }
+});
+
+const KIND = k => {
+  k = (k || "").toLowerCase();
+  if (k.includes("fun") || k.includes("method") || k.includes("constructor")) return ["f", "f"];
+  if (k.includes("class") || k.includes("interface") || k.includes("object") || k.includes("type") || k.includes("enum")) return ["c", "C"];
+  if (k.includes("prop") || k.includes("field")) return ["p", "p"];
+  if (k.includes("var") || k.includes("val") || k.includes("param") || k.includes("local")) return ["v", "v"];
+  if (k.includes("keyword")) return ["k", "k"];
+  return ["o", "•"];
+};
+function renderHint(el, _data, item) {
+  const [cls, ch] = KIND(item.kind);
+  el.innerHTML = `<span class="hk ${cls}">${ch}</span><span></span><span class="hd"></span>`;
+  el.children[1].textContent = item.displayText || item.text;
+  el.children[2].textContent = item.detail || "";
+}
+
+function localHint(cm) {
+  const cur = cm.getCursor(), line = cm.getLine(cur.line);
+  let start = cur.ch; while (start && /\w/.test(line[start - 1])) start--;
+  const word = line.slice(start, cur.ch);
+  const idents = new Set(cm.getValue().match(/\b[A-Za-z_]\w*\b/g) || []);
+  const pool = [...KEYWORDS.map(k => ({ text: k, kind: "keyword" })), ...BUILTINS.map(b => ({ text: b, kind: "function" })),
+    ...[...idents].map(i => ({ text: i, kind: "local" }))];
+  const seen = new Set();
+  const list = pool.filter(i => i.text.startsWith(word) && i.text !== word && !seen.has(i.text) && seen.add(i.text))
+    .slice(0, 60).map(i => ({ ...i, render: renderHint }));
+  return { list, from: CodeMirror.Pos(cur.line, start), to: cur };
+}
+
+function hintAsync(cm, callback) {
+  const seq = ++hintSeq;
+  if (!analysis.available) return callback(localHint(cm));
+  const offset = cm.indexFromPos(cm.getCursor());
+  analysis.request("complete", cm.getValue(), String(offset)).then(res => {
+    if (seq !== hintSeq) return;
+    if (res.error || !res.items || !res.items.length) return callback(localHint(cm));
+    const cur = cm.getCursor();
+    const from = typeof res.from === "number" ? cm.posFromIndex(res.from) : localHint(cm).from;
+    const typed = cm.getRange(from, cur);
+    const list = res.items
+      .filter(i => i.label.startsWith(typed) || !typed)
+      .slice(0, 200)
+      .map(i => ({ text: i.label.replace(/\(.*$/, ""), displayText: i.label, kind: i.kind, detail: i.detail, render: renderHint }));
+    callback({ list, from, to: cur });
+  });
+}
+hintAsync.async = true;
+
+editor.on("inputRead", (cm, change) => {
+  if (change.origin !== "+input") return;
+  const ch = change.text[0].slice(-1);
+  if (ch === "." || (/[A-Za-z_]/.test(ch) && !cm.state.completionActive)) {
+    const line = cm.getLine(cm.getCursor().line).slice(0, cm.getCursor().ch);
+    if (ch === "." || /(^|[^\w])[A-Za-z_]\w?$/.test(line)) cm.showHint({ hint: hintAsync, completeSingle: false });
+  }
+});
+
+function lintAsync(text, updateLinting, _options, cm) {
+  const seq = ++lintSeq;
+  if (!analysis.available) return updateLinting([]);
+  analysis.request("analyze", text).then(res => {
+    if (seq !== lintSeq || res.error) return;
+    updateLinting((res.diagnostics || []).map(d => ({
+      from: cm.posFromIndex(d.from), to: cm.posFromIndex(Math.max(d.to, d.from + 1)),
+      message: d.message, severity: d.severity === "ERROR" ? "error" : "warning"
+    })));
+  });
+}
+
+// ---------- console ----------
+const out = document.getElementById("out"), statusEl = document.getElementById("status");
+function print(text, cls) { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; out.appendChild(d); out.scrollTop = out.scrollHeight; }
+function printDiag(d) {
+  const p = editor.posFromIndex(d.from);
+  const row = document.createElement("div");
+  row.className = d.severity === "ERROR" ? "err" : "warn";
+  const a = document.createElement("a");
+  a.textContent = `(${p.line + 1}:${p.ch + 1})`;
+  a.onclick = () => { editor.focus(); editor.setCursor(p); };
+  row.append(`${d.severity === "ERROR" ? "e" : "w"}: `, a, ` ${d.message}`);
+  out.appendChild(row);
+}
+document.getElementById("clear").onclick = () => { out.textContent = ""; };
+
+// ---------- run ----------
+const runBtn = document.getElementById("run");
+let firstRun = true;
+async function run() {
+  if (runBtn.disabled) return;
+  runBtn.disabled = true;
   out.textContent = "";
-  const started = performance.now();
-  $("status").textContent = compiler ? "컴파일 중…" : "컴파일러 내려받고 컴파일 중…";
+  const t0 = performance.now();
+  statusEl.textContent = firstRun ? "컴파일러 준비 + 컴파일 중… (첫 실행은 수 초)" : "컴파일 중…";
   try {
-    const result = await compile($("src").value);
-    if (result.error) throw new Error(result.error);
-    for (const d of result.diagnostics) print(`${d.severity}: ${d.message}`, d.severity === "ERROR" ? "err" : "");
-    if (result.ok) {
-      $("status").textContent = `컴파일 ${result.milliseconds}ms · 실행 중…`;
-      const error = await run(result.files);
-      if (error) print(error, "err");
-    }
-    $("status").textContent = `완료 (${Math.round(performance.now() - started)}ms)`;
+    const res = await compiler.request("compile", editor.getValue());
+    if (res.error) throw new Error(res.error);
+    (res.diagnostics || []).forEach(printDiag);
+    if (!res.ok) { statusEl.textContent = `컴파일 실패 · ${res.milliseconds}ms`; return; }
+    statusEl.textContent = `컴파일 ${res.milliseconds}ms · 실행 중…`;
+    const t1 = performance.now();
+    const error = await runProgram(res.files, (line, level) => print(line, level === "error" ? "err" : ""));
+    if (error) print(error, "err");
+    statusEl.textContent = `컴파일 ${res.milliseconds}ms · 실행 ${Math.round(performance.now() - t1)}ms · 전체 ${Math.round(performance.now() - t0)}ms`;
+    firstRun = false;
   } catch (e) {
     print(String(e.message || e), "err");
-    $("status").textContent = "실패";
+    statusEl.textContent = "실패";
+  } finally {
+    runBtn.disabled = false;
   }
-  button.disabled = false;
+}
+runBtn.onclick = run;
+
+// ---------- examples, share, theme, resize ----------
+const sel = document.getElementById("examples");
+for (const name of Object.keys(EXAMPLES)) sel.add(new Option(name, name));
+sel.onchange = () => { editor.setValue(EXAMPLES[sel.value]); editor.focus(); };
+
+const enc = s => btoa(String.fromCharCode(...new TextEncoder().encode(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)));
+document.getElementById("share").onclick = async () => {
+  const url = `${location.origin}${location.pathname}#code=${enc(editor.getValue())}`;
+  history.replaceState(null, "", url);
+  try { await navigator.clipboard.writeText(url); print("링크를 복사했습니다.", "sys"); }
+  catch { print(url, "sys"); }
 };
+let initial = EXAMPLES["이항분포 PMF"];
+const m = location.hash.match(/code=([\w-]+)/);
+if (m) { try { initial = dec(m[1]); sel.value = ""; } catch {} } else sel.value = "이항분포 PMF";
+editor.setValue(initial);
+
+const root = document.documentElement;
+function setTheme(t) {
+  root.dataset.theme = t;
+  editor.setOption("theme", t === "dark" ? "darcula" : "idea");
+  try { localStorage.setItem("kp-theme", t); } catch {}
+}
+let savedTheme = null; try { savedTheme = localStorage.getItem("kp-theme"); } catch {}
+setTheme(savedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+document.getElementById("theme").onclick = () => setTheme(root.dataset.theme === "dark" ? "light" : "dark");
+
+const mainEl = document.querySelector("main");
+document.getElementById("resizer").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const move = ev => {
+    const r = mainEl.getBoundingClientRect();
+    const consoleH = Math.min(Math.max(r.bottom - ev.clientY, 80), r.height - 120);
+    mainEl.style.gridTemplateRows = `minmax(0,1fr) 6px ${consoleH}px`;
+    editor.refresh();
+  };
+  addEventListener("pointermove", move);
+  addEventListener("pointerup", () => removeEventListener("pointermove", move), { once: true });
+});
+
+// ---------- warm up: start both workers in the background ----------
+print("컴파일러와 분석기를 내려받는 중입니다 (처음 한 번, 약 160MB). 준비되면 위 표시가 초록색이 됩니다.", "sys");
+analysis.request("analyze", editor.getValue()).then(() => editor.performLint && editor.performLint());
+compiler.request("compile", "fun main() {}").then(res => {
+  if (!res.error) { out.textContent = ""; print("준비 완료. Run(Ctrl+Enter)을 눌러 보세요.", "sys"); firstRun = false; }
+});
 </script>
 </body>
 </html>
