@@ -447,11 +447,13 @@ function makeBoard(root) {
       const y = first + i * rowH, x1 = cx(st.f), x2 = cx(st.t), lines = st.lbl.split("\n");
       const g = el("g", { class: "msg", tabindex: "0", role: "button", "aria-label": `${i + 1}: ${st[lang].title}`, "data-i": i }, svg);
       if (st.f === st.t) {
-        el("rect", { class: "hit", x: x1 - 8, y: y - 26, width: laneW / 2 + 70, height: rowH - 6 }, g);
-        el("path", { d: `M${x1} ${y - 6} h30 v14 h-26` }, g);
-        el("path", { class: "head", d: `M${x1 + 4} ${y + 8} l7 -4 v8 z` }, g);
-        const tx = el("text", { x: x1 + 38, y: y + (lines.length > 1 ? -5 : 5), class: "lbl" }, g);
-        lines.forEach((ln, k) => { const s = el("tspan", { x: x1 + 38, dy: k ? 13 : 0 }, tx); s.textContent = ln; });
+        // On the last lane the loop and its label go to the left, so they stay inside the drawing.
+        const s = st.f === lanes.length - 1 ? -1 : 1, lx = x1 + s * 38;
+        el("rect", { class: "hit", x: s > 0 ? x1 - 8 : x1 - laneW / 2 - 70, y: y - 26, width: laneW / 2 + 78, height: rowH - 6 }, g);
+        el("path", { d: `M${x1} ${y - 6} h${s * 30} v14 h${-s * 26}` }, g);
+        el("path", { class: "head", d: `M${x1 + s * 4} ${y + 8} l${s * 7} -4 v8 z` }, g);
+        const tx = el("text", { x: lx, y: y + (lines.length > 1 ? -5 : 5), class: "lbl", "text-anchor": s > 0 ? "start" : "end" }, g);
+        lines.forEach((ln, k) => { const sp = el("tspan", { x: lx, dy: k ? 13 : 0 }, tx); sp.textContent = ln; });
       } else {
         const dir = x2 > x1 ? 1 : -1;
         el("rect", { class: "hit", x: Math.min(x1, x2), y: y - 28, width: Math.abs(x2 - x1), height: rowH - 6 }, g);
